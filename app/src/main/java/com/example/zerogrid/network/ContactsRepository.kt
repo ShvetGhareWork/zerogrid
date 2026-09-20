@@ -40,13 +40,15 @@ class ContactsRepository(
         }
     }
 
-    suspend fun addContact(name: String, phoneNumber: String, relationship: String): ContactsResult<ContactDto> {
+    suspend fun addContact(emailOrPhone: String, label: String = "Emergency Contact"): ContactsResult<ContactDto> {
         return try {
             val response = api.addContact(
                 body = AddContactRequest(
-                    name = name.trim(),
-                    phoneNumber = phoneNumber.trim(),
-                    relationship = relationship.trim().ifEmpty { "Other" }
+                    contactEmailOrPhone = emailOrPhone.trim(),
+                    label = label.trim().ifEmpty { "Emergency Contact" },
+                    name = label.trim(),
+                    phoneNumber = emailOrPhone.trim(),
+                    relationship = label.trim().ifEmpty { "Emergency Contact" }
                 )
             )
             if (response.isSuccessful && response.body() != null) {

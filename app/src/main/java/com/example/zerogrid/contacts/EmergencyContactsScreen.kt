@@ -116,8 +116,8 @@ fun EmergencyContactsScreen(
                 showAddDialog = false
                 viewModel.resetAddState()
             },
-            onAdd = { name, phone, relationship ->
-                viewModel.addContact(name, phone, relationship)
+            onAdd = { emailOrPhone, label ->
+                viewModel.addContact(emailOrPhone, label)
             }
         )
     }
@@ -309,7 +309,7 @@ fun EmergencyContactsScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
-                        items(contacts, key = { it.id }) { contact ->
+                        items(contacts, key = { it.id.ifEmpty { it.hashCode().toString() } }) { contact ->
                             ContactItemCard(
                                 contact = contact,
                                 onDelete = { contactToDelete = contact }
@@ -330,7 +330,7 @@ private fun ContactItemCard(
     onDelete: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
-    val initials = contact.name.take(2).uppercase().ifEmpty { "EC" }
+    val initials = contact.name.trim().take(2).uppercase().ifEmpty { "EC" }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -414,21 +414,20 @@ private fun ContactItemCard(
 private fun AddContactDialog(
     addState: AddContactState,
     onDismiss: () -> Unit,
-    onAdd: (name: String, phoneNumber: String, relationship: String) -> Unit
+    onAdd: (emailOrPhone: String, label: String) -> Unit
 ) {
     val colors = ZeroGridTheme.colors
-    var name by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
-    var selectedRelationship by remember { mutableStateOf("Parent") }
-    var customRelationship by remember { mutableStateOf("") }
+    var emailOrPhone by remember { mutableStateOf("") }
+    var selectedRelationship by remember { mutableStateOf("Family") }
+    var customLabel by remember { mutableStateOf("") }
 
-    val presetRelationships = listOf("Parent", "Spouse", "Sibling", "Friend", "Doctor", "Other")
+    val presetRelationships = listOf("Family", "Parent", "Spouse", "Sibling", "Friend", "Doctor", "Other")
 
-    val isPhoneValid = remember(phoneNumber) {
-        phoneNumber.isBlank() || ValidationUtils.isValidPhone(phoneNumber)
+    val trimmedInput = emailOrPhone.trim()
+    val isInputValid = remember(trimmedInput) {
+        trimmedInput.isNotBlank() && ValidationUtils.isValidEmailOrPhone(trimmedInput)
     }
 
-    val isFormValid = name.isNotBlank() && phoneNumber.isNotBlank() && isPhoneValid
     val isLoading = addState is AddContactState.Loading
     val errorMessage = (addState as? AddContactState.Error)?.message
 
@@ -436,26 +435,44 @@ private fun AddContactDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.cardBackground,
         title = {
-            Text("Add Emergency Contact", color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(colors.primary.copy(alpha = 0.15f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PersonSearch,
+                        contentDescription = null,
+                        tint = colors.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Add Emergency Contact", color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Emergency contacts will receive automated FCM push notifications when you trigger an SOS.",
+                    text = "Add a registered ZeroGrid user by their Email or Phone. They will receive your emergency broadcast notifications and GPS coordinates when you trigger an SOS.",
                     color = colors.textSecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Full Name", color = colors.textSecondary, fontSize = 13.sp) },
+                    value = emailOrPhone,
+                    onValueChange = { emailOrPhone = it },
+                    label = { Text("Email or Phone Number", color = colors.textSecondary, fontSize = 13.sp) },
+                    placeholder = { Text("alice@example.com or +919999999999", color = colors.textSecondary.copy(alpha = 0.5f), fontSize = 12.sp) },
                     singleLine = true,
+                    isError = trimmedInput.isNotBlank() && !isInputValid,
                     leadingIcon = {
-                        Icon(Icons.Outlined.Person, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Outlined.PersonSearch, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
                     },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = colors.textPrimary,
@@ -469,33 +486,10 @@ private fun AddContactDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = phoneNumber,
-                    onValueChange = { phoneNumber = it },
-                    label = { Text("Phone Number", color = colors.textSecondary, fontSize = 13.sp) },
-                    singleLine = true,
-                    isError = phoneNumber.isNotBlank() && !isPhoneValid,
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Phone, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.textPrimary,
-                        unfocusedTextColor = colors.textPrimary,
-                        focusedContainerColor = colors.surfaceNested,
-                        unfocusedContainerColor = colors.surfaceNested,
-                        focusedBorderColor = colors.primary,
-                        unfocusedBorderColor = colors.divider,
-                        focusedLabelColor = colors.primary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (phoneNumber.isNotBlank() && !isPhoneValid) {
+                if (trimmedInput.isNotBlank() && !isInputValid) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Must be a valid 7-15 digit phone number",
+                        text = "Enter a valid email (user@example.com) or phone number (7-15 digits)",
                         color = colors.accentRed,
                         fontSize = 11.sp
                     )
@@ -504,7 +498,7 @@ private fun AddContactDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "RELATIONSHIP",
+                    text = "LABEL / RELATIONSHIP",
                     color = colors.textSecondary,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -517,7 +511,7 @@ private fun AddContactDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    presetRelationships.take(3).forEach { rel ->
+                    presetRelationships.take(4).forEach { rel ->
                         FilterChip(
                             selected = selectedRelationship == rel,
                             onClick = { selectedRelationship = rel },
@@ -537,11 +531,12 @@ private fun AddContactDialog(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    presetRelationships.drop(3).forEach { rel ->
+                    presetRelationships.drop(4).forEach { rel ->
                         FilterChip(
                             selected = selectedRelationship == rel,
                             onClick = { selectedRelationship = rel },
@@ -565,9 +560,9 @@ private fun AddContactDialog(
                 if (selectedRelationship == "Other") {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
-                        value = customRelationship,
-                        onValueChange = { customRelationship = it },
-                        label = { Text("Custom Relationship (e.g. Guardian)", color = colors.textSecondary, fontSize = 12.sp) },
+                        value = customLabel,
+                        onValueChange = { customLabel = it },
+                        label = { Text("Custom Label (e.g. Neighbor, Guardian)", color = colors.textSecondary, fontSize = 12.sp) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = colors.textPrimary,
@@ -584,26 +579,45 @@ private fun AddContactDialog(
 
                 if (!errorMessage.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = errorMessage,
-                        color = colors.accentRed,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colors.accentRed.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, colors.accentRed.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ErrorOutline,
+                                contentDescription = null,
+                                tint = colors.accentRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage,
+                                color = colors.accentRed,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val finalRel = if (selectedRelationship == "Other") {
-                        customRelationship.trim().ifEmpty { "Other" }
+                    val finalLabel = if (selectedRelationship == "Other") {
+                        customLabel.trim().ifEmpty { "Emergency Contact" }
                     } else {
                         selectedRelationship
                     }
-                    onAdd(name.trim(), phoneNumber.trim(), finalRel)
+                    onAdd(trimmedInput, finalLabel)
                 },
-                enabled = !isLoading && isFormValid,
+                enabled = !isLoading && isInputValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.primary,
                     disabledContainerColor = colors.primary.copy(alpha = 0.35f)

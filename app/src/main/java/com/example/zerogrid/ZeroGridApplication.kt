@@ -28,8 +28,18 @@ class ZeroGridApplication : Application() {
         // 3. Graceful Firebase initialization
         try {
             com.google.firebase.FirebaseApp.initializeApp(this)
+            val projectId = com.google.firebase.FirebaseApp.getInstance().options.projectId
+            Log.d("FCM_CHECK", "Firebase initialized: $projectId")
+
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    Log.w("FCM_CHECK", "Token fetch failed", task.exception)
+                    return@addOnCompleteListener
+                }
+                Log.d("FCM_CHECK", "Token: ${task.result}")
+            }
         } catch (e: Exception) {
-            Log.w("FCM", "Firebase not configured — FCM disabled for this build", e)
+            Log.w("FCM_CHECK", "Firebase not configured", e)
         }
     }
 
