@@ -53,7 +53,11 @@ class AuthViewModel(
         if (_uiState.value is AuthUiState.Loading) return
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            _uiState.value = when (val result = repository.login(email.trim(), password)) {
+            val result = repository.login(email.trim(), password)
+            if (result is AuthResult.Success) {
+                syncFcmTokenOnSuccess()
+            }
+            _uiState.value = when (result) {
                 is AuthResult.Success      -> AuthUiState.Success(result.role, result.user.profileComplete)
                 is AuthResult.Error        -> AuthUiState.Error(result.message)
                 is AuthResult.AdminPending -> AuthUiState.AdminPending(result.message)
@@ -65,11 +69,36 @@ class AuthViewModel(
         if (_uiState.value is AuthUiState.Loading) return
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            _uiState.value = when (val result = repository.register(email.trim(), password, displayName.trim(), role)) {
+            val result = repository.register(email.trim(), password, displayName.trim(), role)
+            if (result is AuthResult.Success) {
+                syncFcmTokenOnSuccess()
+            }
+            _uiState.value = when (result) {
                 is AuthResult.Success      -> AuthUiState.Success(result.role, result.user.profileComplete)
                 is AuthResult.Error        -> AuthUiState.Error(result.message)
                 is AuthResult.AdminPending -> AuthUiState.AdminPending(result.message)
             }
+        }
+    }
+
+    private fun syncFcmTokenOnSuccess() {
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful && !task.result.isNullOrBlank()) {
+                        val token = task.result
+                        viewModelScope.launch {
+                            try {
+                                repository.updateFcmToken(token)
+                                android.util.Log.d("FCM", "FCM token synced after auth: ${token.take(15)}...")
+                            } catch (e: Exception) {
+                                android.util.Log.w("FCM", "Failed to sync token after auth", e)
+                            }
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            android.util.Log.w("FCM", "Firebase messaging unavailable", e)
         }
     }
 

@@ -24,6 +24,13 @@ class ZeroGridApplication : Application() {
 
         // 2. Setup High-Priority SOS Notification Channel
         setupNotificationChannels()
+
+        // 3. Graceful Firebase initialization
+        try {
+            com.google.firebase.FirebaseApp.initializeApp(this)
+        } catch (e: Exception) {
+            Log.w("FCM", "Firebase not configured — FCM disabled for this build", e)
+        }
     }
 
     private fun setupNotificationChannels() {
