@@ -506,6 +506,14 @@ fun SettingsScreen(
                                     )
                                     HorizontalDivider(color = colors.divider, thickness = 1.dp)
                                     SettingsActionItem(
+                                        icon = Icons.Outlined.FamilyRestroom,
+                                        title = "Family Links",
+                                        subtitle = "Guardian network • Child safety & location telemetry",
+                                        actionText = "Manage",
+                                        onClick = { onNavigate(Screen.FAMILY_LINKS) }
+                                    )
+                                    HorizontalDivider(color = colors.divider, thickness = 1.dp)
+                                    SettingsActionItem(
                                         icon = Icons.Outlined.WarningAmber,
                                         title = "SOS Emergency Center",
                                         subtitle = "Distress beacons & real-time responder alerts",

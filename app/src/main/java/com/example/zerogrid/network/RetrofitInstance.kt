@@ -1,5 +1,6 @@
 package com.example.zerogrid.network
 
+import com.example.zerogrid.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -8,9 +9,20 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitInstance {
 
+    @Volatile
+    private var tokenStore: TokenStore? = null
+
+    fun initialize(tokenStore: TokenStore) {
+        this.tokenStore = tokenStore
+    }
+
+    private val authInterceptor = AuthInterceptor(object : TokenStore {
+        override fun getToken(): String? = tokenStore?.getToken()
+    })
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         // Log full request/response body in debug builds only
-        level = if (com.example.zerogrid.BuildConfig.DEBUG) {
+        level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
         } else {
             HttpLoggingInterceptor.Level.NONE
@@ -18,6 +30,7 @@ object RetrofitInstance {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(authInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -25,7 +38,7 @@ object RetrofitInstance {
         .build()
 
     private val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(ApiConstants.BASE_URL)
+        .baseUrl(BuildConfig.BASE_URL)
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
@@ -36,5 +49,13 @@ object RetrofitInstance {
 
     val contactsApi: ContactsApiService by lazy {
         retrofit.create(ContactsApiService::class.java)
+    }
+
+    val sosApi: SosApiService by lazy {
+        retrofit.create(SosApiService::class.java)
+    }
+
+    val familyApi: FamilyApiService by lazy {
+        retrofit.create(FamilyApiService::class.java)
     }
 }

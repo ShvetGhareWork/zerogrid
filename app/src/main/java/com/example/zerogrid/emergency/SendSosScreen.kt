@@ -30,11 +30,14 @@ import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.mesh.engine.MeshNode
 import com.example.zerogrid.navigation.Screen
 import com.example.zerogrid.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     val context = LocalContext.current
     val meshEngine = MeshEngine.getInstance(context)
+    val coroutineScope = rememberCoroutineScope()
+    val sosDispatcher = remember { UnifiedSosDispatcher(context) }
     var selectedType by remember { mutableStateOf("Medical") }
     var emergencyMessage by remember { mutableStateOf("") }
     var locationSharingEnabled by remember { mutableStateOf(true) }
@@ -171,12 +174,14 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
             // Broadcast SOS Action Button
             Button(
                 onClick = {
-                    meshEngine.triggerSosBeacon(
-                        category = selectedType,
-                        message = emergencyMessage,
-                        lat = if (locationSharingEnabled) 0.0 else null, // Placeholder coordinates
-                        lon = if (locationSharingEnabled) 0.0 else null
-                    )
+                    coroutineScope.launch {
+                        sosDispatcher.triggerSos(
+                            lat = if (locationSharingEnabled) 0.0 else null,
+                            lng = if (locationSharingEnabled) 0.0 else null,
+                            category = selectedType,
+                            message = emergencyMessage
+                        )
+                    }
                     onNavigate(Screen.SOS_CENTER)
                 },
                 modifier = Modifier

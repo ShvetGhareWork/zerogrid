@@ -68,7 +68,7 @@ fun ZeroGridBottomBar(
                     NavTab.MESSAGES -> (currentScreen == Screen.MESSAGES || currentScreen == Screen.CHANNELS || currentScreen == Screen.CHAT_DETAIL || currentScreen == Screen.PEER_DIRECT_CHAT)
                     NavTab.FILES -> (currentScreen == Screen.FILES || currentScreen == Screen.SEND_FILE || currentScreen == Screen.FILE_TRANSFER)
                     NavTab.SOS -> (currentScreen == Screen.SOS_CENTER || currentScreen == Screen.SEND_SOS)
-                    NavTab.SETTINGS -> (currentScreen == Screen.SETTINGS || currentScreen == Screen.SECURITY_PRIVACY || currentScreen == Screen.EMERGENCY_CONTACTS || currentScreen == Screen.PROFILE)
+                    NavTab.SETTINGS -> (currentScreen == Screen.SETTINGS || currentScreen == Screen.SECURITY_PRIVACY || currentScreen == Screen.EMERGENCY_CONTACTS || currentScreen == Screen.FAMILY_LINKS || currentScreen == Screen.PROFILE)
                 }
 
                 val itemColor = if (tab == NavTab.SOS) {

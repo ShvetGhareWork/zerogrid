@@ -27,7 +27,7 @@ class ContactsRepository(
 
     suspend fun getContacts(): ContactsResult<List<ContactDto>> {
         return try {
-            val response = api.getContacts(bearerToken())
+            val response = api.getContacts()
             if (response.isSuccessful) {
                 ContactsResult.Success(response.body()?.contacts ?: emptyList())
             } else {
@@ -40,13 +40,13 @@ class ContactsRepository(
         }
     }
 
-    suspend fun addContact(emailOrPhone: String, label: String): ContactsResult<ContactDto> {
+    suspend fun addContact(name: String, phoneNumber: String, relationship: String): ContactsResult<ContactDto> {
         return try {
             val response = api.addContact(
-                token = bearerToken(),
                 body = AddContactRequest(
-                    contactEmailOrPhone = emailOrPhone.trim(),
-                    label = label.trim().ifEmpty { "Emergency Contact" }
+                    name = name.trim(),
+                    phoneNumber = phoneNumber.trim(),
+                    relationship = relationship.trim().ifEmpty { "Other" }
                 )
             )
             if (response.isSuccessful && response.body() != null) {
@@ -64,7 +64,6 @@ class ContactsRepository(
     suspend fun deleteContact(contactId: String): ContactsResult<String> {
         return try {
             val response = api.deleteContact(
-                token = bearerToken(),
                 id = contactId
             )
             if (response.isSuccessful) {

@@ -22,6 +22,7 @@ enum class Screen {
     SECURITY_PRIVACY,
     DEBUG_CONSOLE,
     EMERGENCY_CONTACTS,
+    FAMILY_LINKS,
     PROFILE
 }
 

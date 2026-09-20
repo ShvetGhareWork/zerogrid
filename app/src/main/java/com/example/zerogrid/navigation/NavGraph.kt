@@ -135,6 +135,10 @@ fun ZeroGridApp(onLogout: () -> Unit = {}) {
                         onNavigate = { navigateTo(it) },
                         onBack = { navigateBack() }
                     )
+                    Screen.FAMILY_LINKS -> com.example.zerogrid.family.FamilyLinksScreen(
+                        onNavigate = { navigateTo(it) },
+                        onBack = { navigateBack() }
+                    )
                     Screen.PROFILE -> com.example.zerogrid.profile.ProfileScreen(
                         onNavigate = { navigateTo(it) },
                         onBack = { navigateBack() },

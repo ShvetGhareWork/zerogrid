@@ -6,25 +6,20 @@ import retrofit2.http.*
 
 // ── Contact DTOs ───────────────────────────────────────────────────────────
 
-data class ContactUserDto(
-    @SerializedName("id")          val id: String,
-    @SerializedName("displayName") val displayName: String,
-    @SerializedName("email")       val email: String,
-    @SerializedName("phoneNumber") val phoneNumber: String? = null,
-    @SerializedName("role")        val role: String? = null,
-    @SerializedName("photoUrl")    val photoUrl: String? = null
-)
-
 data class ContactDto(
-    @SerializedName("id")          val id: String,
-    @SerializedName("label")       val label: String = "Emergency Contact",
-    @SerializedName("createdAt")   val createdAt: String? = null,
-    @SerializedName("contactUser") val contactUser: ContactUserDto
+    @SerializedName("id")               val id: String,
+    @SerializedName("name")             val name: String,
+    @SerializedName("phoneNumber")      val phoneNumber: String,
+    @SerializedName("relationship")     val relationship: String = "Other",
+    @SerializedName("contactUserId")    val contactUserId: String? = null,
+    @SerializedName("isRegisteredUser") val isRegisteredUser: Boolean = false,
+    @SerializedName("createdAt")        val createdAt: String? = null
 )
 
 data class AddContactRequest(
-    @SerializedName("contactEmailOrPhone") val contactEmailOrPhone: String,
-    @SerializedName("label")               val label: String = "Emergency Contact"
+    @SerializedName("name")         val name: String,
+    @SerializedName("phoneNumber")  val phoneNumber: String,
+    @SerializedName("relationship") val relationship: String
 )
 
 data class ContactsListResponse(
@@ -46,19 +41,15 @@ data class DeleteContactResponse(
 interface ContactsApiService {
 
     @GET(ApiConstants.CONTACTS)
-    suspend fun getContacts(
-        @Header("Authorization") token: String
-    ): Response<ContactsListResponse>
+    suspend fun getContacts(): Response<ContactsListResponse>
 
     @POST(ApiConstants.CONTACTS)
     suspend fun addContact(
-        @Header("Authorization") token: String,
         @Body body: AddContactRequest
     ): Response<AddContactResponse>
 
     @DELETE("${ApiConstants.CONTACTS}/{id}")
     suspend fun deleteContact(
-        @Header("Authorization") token: String,
         @Path("id") id: String
     ): Response<DeleteContactResponse>
 }

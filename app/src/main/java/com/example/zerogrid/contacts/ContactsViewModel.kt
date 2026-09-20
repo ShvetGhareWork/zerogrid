@@ -56,11 +56,11 @@ class ContactsViewModel(
         }
     }
 
-    fun addContact(emailOrPhone: String, label: String) {
+    fun addContact(name: String, phoneNumber: String, relationship: String) {
         if (_addState.value is AddContactState.Loading) return
         viewModelScope.launch {
             _addState.value = AddContactState.Loading
-            when (val result = repository.addContact(emailOrPhone, label)) {
+            when (val result = repository.addContact(name, phoneNumber, relationship)) {
                 is ContactsResult.Success -> {
                     val updated = listOf(result.data) + _contacts.value.filterNot { it.id == result.data.id }
                     _contacts.value = updated

@@ -81,12 +81,13 @@ fun MainAppGateway() {
         currentScreen = AppScreen.Login
     }
 
-    // Start mesh service once and only once when the user enters an authenticated dashboard
+    // Start mesh service and sync FCM push token when the user enters an authenticated dashboard
     LaunchedEffect(currentScreen) {
         val isAuthenticated = currentScreen == AppScreen.UserDashboard || currentScreen == AppScreen.AdminPanel
         if (isAuthenticated && sessionManager.isLoggedIn()) {
             Log.d("MainAppGateway", "Authenticated screen active ($currentScreen). Starting mesh service.")
             MeshForegroundService.startService(context)
+            com.example.zerogrid.service.ZeroGridFirebaseMessagingService.syncTokenWithBackend(context)
         }
     }
 
