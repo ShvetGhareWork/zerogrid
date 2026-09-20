@@ -81,12 +81,14 @@ fun MainAppGateway() {
         currentScreen = AppScreen.Login
     }
 
-    // Start mesh service once and only once when the user enters an authenticated dashboard
+    // Start mesh service, sync FCM token, and ensure notification permission on authenticated dashboard
     LaunchedEffect(currentScreen) {
         val isAuthenticated = currentScreen == AppScreen.UserDashboard || currentScreen == AppScreen.AdminPanel
         if (isAuthenticated && sessionManager.isLoggedIn()) {
             Log.d("MainAppGateway", "Authenticated screen active ($currentScreen). Starting mesh service.")
             MeshForegroundService.startService(context)
+            com.example.zerogrid.service.ZeroGridFirebaseMessagingService.syncTokenWithBackend(context)
+            (context as? MainActivity)?.requestNotificationPermission()
         }
     }
 
@@ -148,7 +150,10 @@ fun MainAppGateway() {
 
         // ── Citizen: existing mesh app ─────────────────────────────────
         AppScreen.UserDashboard -> {
-            ZeroGridApp(onLogout = { logout() })
+            val activity = context as? ComponentActivity
+            val hasSosIntent = activity?.intent?.hasExtra("EXTRA_SOS_ID") == true
+            val initialScreen = if (hasSosIntent) com.example.zerogrid.navigation.Screen.SOS_CENTER else com.example.zerogrid.navigation.Screen.HOME
+            ZeroGridApp(initialScreen = initialScreen, onLogout = { logout() })
         }
 
         // ── Admin: dedicated admin panel ───────────────────────────────
@@ -234,6 +239,15 @@ class MainActivity : ComponentActivity() {
             requestPermissionLauncher.launch(missingPermissions.toTypedArray())
         } else {
             Log.d("MainActivity", "All required permissions already granted.")
+        }
+    }
+
+    fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "Requesting contextual POST_NOTIFICATIONS permission for emergency alerts.")
+                requestPermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
         }
     }
 }

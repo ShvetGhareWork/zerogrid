@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -26,7 +27,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Set default base URL for debug (Render live backend; can switch to "http://10.0.2.2:5000/" for local emulator)
+            buildConfigField("String", "BASE_URL", "\"https://zerogridweb.onrender.com/\"")
+        }
         release {
+            buildConfigField("String", "BASE_URL", "\"https://zerogridweb.onrender.com/\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -91,4 +97,11 @@ dependencies {
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
+
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
+    // WorkManager — Offline Queue
+    implementation(libs.androidx.work.runtime.ktx)
 }

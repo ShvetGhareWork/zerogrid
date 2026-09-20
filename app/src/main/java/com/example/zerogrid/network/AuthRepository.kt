@@ -113,7 +113,6 @@ class AuthRepository(
     suspend fun completeProfile(phoneNumber: String, dateOfBirth: String): ProfileResult {
         return try {
             val response = api.completeProfile(
-                token = bearerToken(),
                 body = CompleteProfileRequest(phoneNumber, dateOfBirth)
             )
             when {
@@ -139,7 +138,7 @@ class AuthRepository(
 
     suspend fun getProfile(): ProfileResult {
         return try {
-            val response = api.getMe(bearerToken())
+            val response = api.getMe()
             when {
                 response.isSuccessful -> {
                     val user = response.body()!!.user
@@ -168,7 +167,6 @@ class AuthRepository(
     ): ProfileResult {
         return try {
             val response = api.updateProfile(
-                token = bearerToken(),
                 body = UpdateProfileRequest(displayName, phoneNumber, dateOfBirth)
             )
             when {
@@ -189,6 +187,19 @@ class AuthRepository(
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) e.printStackTrace()
             ProfileResult.Error("No connection. Check your internet and try again.")
+        }
+    }
+
+    /**
+     * Send updated FCM push token to server for emergency notifications.
+     */
+    suspend fun updateFcmToken(fcmToken: String): Boolean {
+        return try {
+            val response = api.updateFcmToken(FcmTokenRequest(fcmToken.trim()))
+            response.isSuccessful
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) e.printStackTrace()
+            false
         }
     }
 }

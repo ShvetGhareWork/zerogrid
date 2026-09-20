@@ -38,7 +38,10 @@ private val SosAmber = Color(0xFFFF9500)
 private val SosCyan = Color(0xFF00E5FF)
 
 @Composable
-fun ZeroGridApp(onLogout: () -> Unit = {}) {
+fun ZeroGridApp(
+    initialScreen: Screen = Screen.HOME,
+    onLogout: () -> Unit = {}
+) {
     val context = LocalContext.current
     val meshEngine = remember { MeshEngine.getInstance(context) }
 
@@ -50,7 +53,7 @@ fun ZeroGridApp(onLogout: () -> Unit = {}) {
         it.packetId !in acknowledgedAlertIds && it.senderId != meshEngine.localNodeId
     }
 
-    var currentScreen by remember { mutableStateOf(Screen.HOME) }
+    var currentScreen by remember(initialScreen) { mutableStateOf(initialScreen) }
     val backStack = remember { mutableStateListOf<Screen>() }
     // Peer ID selected for direct chat — passed into PEER_DIRECT_CHAT screen
     var selectedPeerId by remember { mutableStateOf("") }
@@ -132,6 +135,10 @@ fun ZeroGridApp(onLogout: () -> Unit = {}) {
                     Screen.SECURITY_PRIVACY -> SecurityPrivacyScreen(onNavigate = { navigateTo(it) })
                     Screen.DEBUG_CONSOLE -> DebugConsoleScreen(onNavigate = { navigateTo(it) })
                     Screen.EMERGENCY_CONTACTS -> com.example.zerogrid.contacts.EmergencyContactsScreen(
+                        onNavigate = { navigateTo(it) },
+                        onBack = { navigateBack() }
+                    )
+                    Screen.FAMILY_LINKS -> com.example.zerogrid.family.FamilyLinksScreen(
                         onNavigate = { navigateTo(it) },
                         onBack = { navigateBack() }
                     )

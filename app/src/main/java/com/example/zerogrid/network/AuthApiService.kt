@@ -59,6 +59,14 @@ data class ApiErrorBody(
     val message: String
 )
 
+data class FcmTokenRequest(
+    val fcmToken: String
+)
+
+data class SimpleMessageResponse(
+    val message: String
+)
+
 // ── Retrofit interface ─────────────────────────────────────────────────────
 
 interface AuthApiService {
@@ -70,17 +78,20 @@ interface AuthApiService {
     suspend fun login(@Body body: LoginRequest): Response<AuthResponse>
 
     @GET(ApiConstants.GET_ME)
-    suspend fun getMe(@Header("Authorization") token: String): Response<ProfileResponse>
+    suspend fun getMe(): Response<ProfileResponse>
 
     @PUT(ApiConstants.UPDATE_ME)
     suspend fun updateProfile(
-        @Header("Authorization") token: String,
         @Body body: UpdateProfileRequest
     ): Response<ProfileResponse>
 
     @PUT(ApiConstants.COMPLETE_PROFILE)
     suspend fun completeProfile(
-        @Header("Authorization") token: String,
         @Body body: CompleteProfileRequest
     ): Response<ProfileResponse>
+
+    @PUT(ApiConstants.FCM_TOKEN)
+    suspend fun updateFcmToken(
+        @Body body: FcmTokenRequest
+    ): Response<SimpleMessageResponse>
 }

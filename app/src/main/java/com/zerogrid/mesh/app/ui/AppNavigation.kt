@@ -2,6 +2,7 @@ package com.zerogrid.mesh.app.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.zerogrid.network.TokenStore
 
 /**
  * Navigation routes for role-selection and dashboard routing.
@@ -24,7 +25,7 @@ enum class UserRole {
  * User session & role persistence manager.
  * Stores auth token, role, profile fields across app restarts.
  */
-class UserSessionManager(context: Context) {
+class UserSessionManager(context: Context) : TokenStore {
 
     companion object {
         private const val PREFS_NAME          = "zerogrid_role_session"
@@ -37,6 +38,7 @@ class UserSessionManager(context: Context) {
         private const val KEY_PHONE_NUMBER    = "phone_number"
         private const val KEY_DATE_OF_BIRTH   = "date_of_birth"
         private const val KEY_ACCOUNT_TYPE    = "account_type"
+        private const val KEY_FCM_TOKEN       = "fcm_token"
 
         @Volatile
         private var INSTANCE: UserSessionManager? = null
@@ -72,6 +74,7 @@ class UserSessionManager(context: Context) {
 
     // ── Auth token & server identity ────────────────────────────────────────
 
+    override fun getToken(): String? = getAuthToken()
     fun getAuthToken(): String? = prefs.getString(KEY_AUTH_TOKEN, null)
     fun setAuthToken(token: String) = prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
 
@@ -99,6 +102,9 @@ class UserSessionManager(context: Context) {
 
     fun getAccountType(): String = prefs.getString(KEY_ACCOUNT_TYPE, "STANDARD") ?: "STANDARD"
     fun setAccountType(type: String) = prefs.edit().putString(KEY_ACCOUNT_TYPE, type).apply()
+
+    fun getFcmToken(): String? = prefs.getString(KEY_FCM_TOKEN, null)
+    fun setFcmToken(token: String) = prefs.edit().putString(KEY_FCM_TOKEN, token.trim()).apply()
 
     // ── Clear all ───────────────────────────────────────────────────────────
 
