@@ -1,9 +1,12 @@
 package com.example.zerogrid.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,11 +35,13 @@ import com.example.zerogrid.onboarding.*
 import com.example.zerogrid.settings.*
 import com.example.zerogrid.debug.*
 import com.example.zerogrid.ui.theme.*
+import kotlinx.coroutines.launch
 
 private val SosRed = Color(0xFFFF3B30)
 private val SosAmber = Color(0xFFFF9500)
 private val SosCyan = Color(0xFF00E5FF)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ZeroGridApp(
     initialScreen: Screen = Screen.HOME,
@@ -44,263 +49,177 @@ fun ZeroGridApp(
 ) {
     val context = LocalContext.current
     val meshEngine = remember { MeshEngine.getInstance(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     val sosAlerts by meshEngine.sosAlerts.collectAsState()
     val acknowledgedAlertIds by meshEngine.acknowledgedAlertIds.collectAsState()
 
-    // Only show pop-up for REMOTE alerts (not ones this device sent itself)
     val activeSosAlert = sosAlerts.firstOrNull {
         it.packetId !in acknowledgedAlertIds && it.senderId != meshEngine.localNodeId
     }
 
-    var currentScreen by remember(initialScreen) { mutableStateOf(initialScreen) }
-    val backStack = remember { mutableStateListOf<Screen>() }
-    // Peer ID selected for direct chat — passed into PEER_DIRECT_CHAT screen
+    val pagerState = rememberPagerState(pageCount = { NavTab.entries.size })
+    var currentSubScreen by remember { mutableStateOf<Screen?>(null) }
     var selectedPeerId by remember { mutableStateOf("") }
 
+    val currentTabScreen = when (pagerState.currentPage) {
+        0 -> Screen.HOME
+        1 -> Screen.MESSAGES
+        2 -> Screen.FILES
+        3 -> Screen.SOS_CENTER
+        4 -> Screen.SETTINGS
+        else -> Screen.HOME
+    }
+
     fun navigateTo(screen: Screen) {
-        if (currentScreen != screen) {
-            backStack.add(currentScreen)
-            currentScreen = screen
+        val targetTab = NavTab.entries.find { it.screen == screen || getTabRootScreens(it).contains(screen) }
+        if (targetTab != null && currentSubScreen == null) {
+            val index = NavTab.entries.indexOf(targetTab)
+            coroutineScope.launch { pagerState.animateScrollToPage(index) }
+        } else {
+            currentSubScreen = screen
         }
     }
 
     fun navigateBack() {
-        if (backStack.isNotEmpty()) {
-            currentScreen = backStack.removeAt(backStack.size - 1)
-        } else if (currentScreen != Screen.HOME) {
-            currentScreen = Screen.HOME
-        }
+        currentSubScreen = null
     }
 
-    fun openPeerChat(peerId: String) {
-        selectedPeerId = peerId
-        navigateTo(Screen.PEER_DIRECT_CHAT)
-    }
-
-    BackHandler(enabled = (currentScreen != Screen.HOME || backStack.isNotEmpty())) {
-        navigateBack()
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            HardwareRequirementBanner()
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                when (currentScreen) {
-                    Screen.HOME -> MeshDashboardScreen(
-                        onNavigate = { navigateTo(it) },
-                        onOpenPeerChat = { peerId -> openPeerChat(peerId) }
-                    )
-                    Screen.MESSAGES -> MessagesScreen(
-                        onNavigate = { navigateTo(it) },
-                        onOpenPeerChat = { peerId -> openPeerChat(peerId) }
-                    )
-                    Screen.PEER_DIRECT_CHAT -> PeerDirectChatScreen(
-                        peerId = selectedPeerId,
-                        onNavigate = { navigateTo(it) }
-                    )
-                    Screen.MESH -> NearbyDevicesScreen(
-                        onNavigate = { navigateTo(it) },
-                        onBackClick = { navigateBack() },
-                        onOpenPeerDetails = { peerId ->
-                            selectedPeerId = peerId
-                            navigateTo(Screen.PEER_DETAILS)
-                        },
-                        onOpenPeerChat = { peerId -> openPeerChat(peerId) }
-                    )
-                    Screen.FILES -> FilesScreen(onNavigate = { navigateTo(it) })
-                    Screen.SETTINGS -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
-                    Screen.SOS_CENTER -> SosCenterScreen(onNavigate = { navigateTo(it) })
-                    Screen.SEND_SOS -> SendSosScreen(onNavigate = { navigateTo(it) })
-                    Screen.SEND_FILE -> SendFileScreen(onNavigate = { navigateTo(it) })
-                    Screen.FILE_TRANSFER -> FileTransferScreen(onNavigate = { navigateTo(it) })
-                    Screen.PEER_DETAILS -> PeerDetailsScreen(
-                        peerId = selectedPeerId,
-                        onNavigate = { navigateTo(it) },
-                        onOpenPeerChat = { peerId -> openPeerChat(peerId) },
-                        onBackClick = { navigateBack() }
-                    )
-                    Screen.CHANNELS -> ChannelsScreen(onNavigate = { navigateTo(it) })
-                    Screen.CHAT_DETAIL -> ChatDetailScreen(onNavigate = { navigateTo(it) })
-                    Screen.SPLASH -> SplashScreen(onNavigate = { navigateTo(it) })
-                    Screen.ONBOARDING -> OnBoardingScreen(onNavigate = { navigateTo(it) })
-                    Screen.PERMISSIONS -> PermissionsScreen(onNavigate = { navigateTo(it) })
-                    Screen.CREATE_IDENTITY -> CreateIdentityScreen(onNavigate = { navigateTo(it) })
-                    Screen.NETWORK_STATUS -> NetworkStatusScreen(onNavigate = { navigateTo(it) })
-                    Screen.SECURITY_PRIVACY -> SecurityPrivacyScreen(onNavigate = { navigateTo(it) })
-                    Screen.DEBUG_CONSOLE -> DebugConsoleScreen(onNavigate = { navigateTo(it) })
-                    Screen.EMERGENCY_CONTACTS -> com.example.zerogrid.contacts.EmergencyContactsScreen(
-                        onNavigate = { navigateTo(it) },
-                        onBack = { navigateBack() }
-                    )
-                    Screen.FAMILY_LINKS -> com.example.zerogrid.family.FamilyLinksScreen(
-                        onNavigate = { navigateTo(it) },
-                        onBack = { navigateBack() }
-                    )
-                    Screen.PROFILE -> com.example.zerogrid.profile.ProfileScreen(
-                        onNavigate = { navigateTo(it) },
-                        onBack = { navigateBack() },
-                        onLogout = onLogout
-                    )
-                }
+    Scaffold(
+        containerColor = ZeroGridTheme.colors.background,
+        bottomBar = {
+            // Render bottom bar ONLY when on root tabs to prevent double-rendering
+            if (currentSubScreen == null) {
+                ZeroGridBottomBar(
+                    currentScreen = currentTabScreen,
+                    onNavigate = { targetScreen ->
+                        val targetTab = NavTab.entries.find { it.screen == targetScreen || getTabRootScreens(it).contains(targetScreen) }
+                        if (targetTab != null) {
+                            val index = NavTab.entries.indexOf(targetTab)
+                            coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                        }
+                    }
+                )
             }
         }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding) // Crucial: Ensures smooth clipping and removes layout lag
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                HardwareRequirementBanner()
 
-
-        // Global High-Priority Emergency Pop-Up Alert Dialog
-        if (activeSosAlert != null) {
-            Dialog(
-                onDismissRequest = {
-                    // Do not dismiss on accidental outside click for safety
-                },
-                properties = DialogProperties(
-                    dismissOnBackPress = false,
-                    dismissOnClickOutside = false,
-                    usePlatformDefaultWidth = false
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.85f))
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
+                if (currentSubScreen != null) {
+                    RenderScreen(
+                        screen = currentSubScreen!!,
+                        selectedPeerId = selectedPeerId,
+                        onNavigate = { navigateTo(it) },
+                        onBack = { navigateBack() },
+                        onOpenPeerChat = { peerId ->
+                            selectedPeerId = peerId
+                            navigateTo(Screen.PEER_DIRECT_CHAT)
+                        },
+                        onLogout = onLogout
+                    )
+                } else {
+                    // Optimized HorizontalPager with hardware acceleration boundary
+                    HorizontalPager(
+                        state = pagerState,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .border(2.dp, Brush.linearGradient(listOf(SosRed, SosAmber, SosRed)), RoundedCornerShape(20.dp)),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceDarker),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .background(SosRed.copy(alpha = 0.2f), CircleShape)
-                                    .border(1.5.dp, SosRed, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "SOS Warning",
-                                    tint = SosRed,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Text(
-                                text = "EMERGENCY SOS BEACON",
-                                color = SosRed,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                letterSpacing = 1.sp
-                            )
-
-                            Text(
-                                text = "Incoming broadcast received via mesh",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = "FROM: ${activeSosAlert.senderId}",
-                                            color = SosCyan,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                        Text(
-                                            text = "${activeSosAlert.hopCount} HOPS",
-                                            color = SosAmber,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Text(
-                                        text = activeSosAlert.payload,
-                                        color = TextPrimary,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
+                            .fillMaxSize()
+                            .weight(1f),
+                        beyondViewportPageCount = 1 // Keeps adjacent pages pre-rendered to eliminate swipe stutter/lag
+                    ) { page ->
+                        when (page) {
+                            0 -> MeshDashboardScreen(
+                                onNavigate = { navigateTo(it) },
+                                onOpenPeerChat = { peerId ->
+                                    selectedPeerId = peerId
+                                    navigateTo(Screen.PEER_DIRECT_CHAT)
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            Button(
-                                onClick = {
-                                    meshEngine.acknowledgeSosAlert(activeSosAlert.packetId)
-                                    navigateTo(Screen.SOS_CENTER)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = SosRed),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    text = "RESPOND IN SOS CENTER",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedButton(
-                                onClick = {
-                                    meshEngine.acknowledgeSosAlert(activeSosAlert.packetId)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    text = "ACKNOWLEDGE & DISMISS",
-                                    color = TextSecondary,
-                                    fontSize = 12.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                            )
+                            1 -> MessagesScreen(
+                                onNavigate = { navigateTo(it) },
+                                onOpenPeerChat = { peerId ->
+                                    selectedPeerId = peerId
+                                    navigateTo(Screen.PEER_DIRECT_CHAT)
+                                }
+                            )
+                            2 -> FilesScreen(onNavigate = { navigateTo(it) })
+                            3 -> SosCenterScreen(onNavigate = { navigateTo(it) })
+                            4 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RenderScreen(
+    screen: Screen,
+    selectedPeerId: String,
+    onNavigate: (Screen) -> Unit,
+    onBack: () -> Unit,
+    onOpenPeerChat: (String) -> Unit,
+    onLogout: () -> Unit
+) {
+    when (screen) {
+        Screen.HOME -> MeshDashboardScreen(onNavigate = onNavigate, onOpenPeerChat = onOpenPeerChat)
+        Screen.MESSAGES -> MessagesScreen(onNavigate = onNavigate, onOpenPeerChat = onOpenPeerChat)
+        Screen.PEER_DIRECT_CHAT -> PeerDirectChatScreen(peerId = selectedPeerId, onNavigate = onNavigate)
+        Screen.MESH -> NearbyDevicesScreen(
+            onNavigate = onNavigate,
+            onBackClick = onBack,
+            onOpenPeerDetails = { peerId -> onOpenPeerChat(peerId) },
+            onOpenPeerChat = onOpenPeerChat
+        )
+        Screen.FILES -> FilesScreen(onNavigate = onNavigate)
+        Screen.SETTINGS -> SettingsScreen(onNavigate = onNavigate, onLogout = onLogout)
+        Screen.SOS_CENTER -> SosCenterScreen(onNavigate = onNavigate)
+        Screen.SEND_SOS -> SendSosScreen(onNavigate = onNavigate)
+        Screen.SEND_FILE -> SendFileScreen(onNavigate = onNavigate)
+        Screen.FILE_TRANSFER -> FileTransferScreen(onNavigate = onNavigate)
+        Screen.PEER_DETAILS -> PeerDetailsScreen(
+            peerId = selectedPeerId,
+            onNavigate = onNavigate,
+            onOpenPeerChat = onOpenPeerChat,
+            onBackClick = onBack
+        )
+        Screen.CHANNELS -> ChannelsScreen(onNavigate = onNavigate)
+        Screen.CHAT_DETAIL -> ChatDetailScreen(onNavigate = onNavigate)
+        Screen.SPLASH -> SplashScreen(onNavigate = onNavigate)
+        Screen.ONBOARDING -> OnBoardingScreen(onNavigate = onNavigate)
+        Screen.PERMISSIONS -> PermissionsScreen(onNavigate = onNavigate)
+        Screen.CREATE_IDENTITY -> CreateIdentityScreen(onNavigate = onNavigate)
+        Screen.NETWORK_STATUS -> NetworkStatusScreen(onNavigate = onNavigate)
+        Screen.SECURITY_PRIVACY -> SecurityPrivacyScreen(onNavigate = onNavigate)
+        Screen.DEBUG_CONSOLE -> DebugConsoleScreen(onNavigate = onNavigate)
+        Screen.EMERGENCY_CONTACTS -> com.example.zerogrid.contacts.EmergencyContactsScreen(
+            onNavigate = onNavigate,
+            onBack = onBack
+        )
+        Screen.FAMILY_LINKS -> com.example.zerogrid.family.FamilyLinksScreen(
+            onNavigate = onNavigate,
+            onBack = onBack
+        )
+        Screen.PROFILE -> com.example.zerogrid.profile.ProfileScreen(
+            onNavigate = onNavigate,
+            onBack = onBack,
+            onLogout = onLogout
+        )
+    }
+}
+
+private fun getTabRootScreens(tab: NavTab): List<Screen> {
+    return when (tab) {
+        NavTab.MESH -> listOf(Screen.HOME, Screen.MESH, Screen.PEER_DETAILS, Screen.NETWORK_STATUS)
+        NavTab.MESSAGES -> listOf(Screen.MESSAGES, Screen.CHANNELS, Screen.CHAT_DETAIL, Screen.PEER_DIRECT_CHAT)
+        NavTab.FILES -> listOf(Screen.FILES, Screen.SEND_FILE, Screen.FILE_TRANSFER)
+        NavTab.SOS -> listOf(Screen.SOS_CENTER, Screen.SEND_SOS)
+        NavTab.SETTINGS -> listOf(Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE)
     }
 }
