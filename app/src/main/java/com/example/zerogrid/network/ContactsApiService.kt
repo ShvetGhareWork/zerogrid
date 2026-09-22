@@ -1,11 +1,13 @@
 package com.example.zerogrid.network
 
+import androidx.compose.runtime.Immutable
 import com.google.gson.annotations.SerializedName
 import retrofit2.Response
 import retrofit2.http.*
 
 // ── Contact DTOs ───────────────────────────────────────────────────────────
 
+@Immutable
 data class ContactUserDto(
     @SerializedName("id")          val id: String? = null,
     @SerializedName("displayName") val displayName: String? = null,
@@ -15,6 +17,7 @@ data class ContactUserDto(
     @SerializedName("photoUrl")    val photoUrl: String? = null
 )
 
+@Immutable
 data class ContactDto(
     @SerializedName("id")               val rawId: String? = null,
     @SerializedName("_id")              val mongoId: String? = null,

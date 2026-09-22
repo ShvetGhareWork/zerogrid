@@ -27,7 +27,7 @@ fun SecurityPrivacyScreen(onNavigate: (Screen) -> Unit = {}) {
     var metadataObfuscation by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { SecurityPrivacyTopBar(onBackClick = { onNavigate(Screen.SETTINGS) }) },
         bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SETTINGS, onNavigate = onNavigate) }
     ) { paddingValues ->

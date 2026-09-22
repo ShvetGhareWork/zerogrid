@@ -2,6 +2,7 @@ package com.example.zerogrid.messaging
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,64 +32,69 @@ fun ChatDetailScreen(onNavigate: (Screen) -> Unit = {}) {
     val colors = ZeroGridTheme.colors // 1. Grab dynamic colors
 
     Scaffold(
-        containerColor = colors.background, // 2. Replace static DarkBackground
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { ChatDetailTopBar(onBackClick = { onNavigate(Screen.MESSAGES) }) },
         bottomBar = { ChatBottomBar(messageText = messageText, onValueChange = { messageText = it }) }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            contentPadding = PaddingValues(vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            item(key = "msg_alex", contentType = "OtherMessage") {
+                OtherMessageItem(
+                    initial = "A",
+                    name = "Alex",
+                    time = "10:42 AM",
+                    message = "Coordinates confirmed for Sector 4. Proceeding with caution.",
+                    badgeText = "Direct",
+                    badgeIcon = Icons.Outlined.Check,
+                    badgeColor = colors.primary
+                )
+            }
 
-            OtherMessageItem(
-                initial = "A",
-                name = "Alex",
-                time = "10:42 AM",
-                message = "Coordinates confirmed for Sector 4. Proceeding with caution.",
-                badgeText = "Direct",
-                badgeIcon = Icons.Outlined.Check,
-                badgeColor = colors.primary // Replace StatusActive
-            )
+            item(key = "msg_rt", contentType = "OtherMessage") {
+                OtherMessageItem(
+                    initial = "RT",
+                    name = "Rescue Team",
+                    time = "10:45 AM",
+                    message = "Copy that. ETA 15 mikes. Ensure LZ is clear.",
+                    badgeText = "2 hops   ↗ Routed through 2 peers",
+                    badgeColor = colors.primary,
+                    isCustomBadge = true
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            item(key = "notif_joined", contentType = "Notification") {
+                SystemNotificationBadge(text = "Device-7A42 joined #mesh")
+            }
 
-            OtherMessageItem(
-                initial = "RT",
-                name = "Rescue Team",
-                time = "10:45 AM",
-                message = "Copy that. ETA 15 mikes. Ensure LZ is clear.",
-                badgeText = "2 hops   ↗ Routed through 2 peers",
-                badgeColor = colors.primary,
-                isCustomBadge = true
-            )
+            item(key = "msg_router", contentType = "OtherMessage") {
+                OtherMessageItem(
+                    icon = Icons.Outlined.Router,
+                    name = "Device-7A42",
+                    time = "10:47 AM",
+                    message = "[AUTOMATED] Signal strength optimal. Establishing relay link.",
+                    badgeText = "Relay  •  1 hop",
+                    badgeColor = colors.primary
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            SystemNotificationBadge(text = "Device-7A42 joined #mesh")
-            Spacer(modifier = Modifier.height(16.dp))
+            item(key = "msg_mine", contentType = "MyMessage") {
+                MyMessageItem(
+                    time = "10:50 AM",
+                    message = "LZ is secure. Standing by for visual.",
+                    statusText = "Delivered ✓"
+                )
+            }
 
-            OtherMessageItem(
-                icon = Icons.Outlined.Router,
-                name = "Device-7A42",
-                time = "10:47 AM",
-                message = "[AUTOMATED] Signal strength optimal. Establishing relay link.",
-                badgeText = "Relay  •  1 hop",
-                badgeColor = colors.primary
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            MyMessageItem(
-                time = "10:50 AM",
-                message = "LZ is secure. Standing by for visual.",
-                statusText = "Delivered ✓"
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+            item(key = "bottom_spacer") {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }

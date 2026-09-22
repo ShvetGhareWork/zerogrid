@@ -1,9 +1,12 @@
 package com.example.zerogrid.mesh.engine
 
+import androidx.compose.runtime.Stable
+
 /**
  * Represents a unified peer node in the ZeroGrid Mesh Network.
  * Supports multi-interface tracking (BLE and Wi-Fi Direct) under a single logical profile.
  */
+@Stable
 data class MeshNode(
     val nodeId: String,
     var alias: String,

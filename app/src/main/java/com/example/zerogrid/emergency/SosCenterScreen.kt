@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,178 +41,188 @@ fun SosCenterScreen(onNavigate: (Screen) -> Unit = {}) {
     val colors = ZeroGridTheme.colors
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { EmergencyTopBar(onBackClick = { onNavigate(Screen.HOME) }) },
 //        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SOS_CENTER, onNavigate = onNavigate) }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
-            MeshStatusBanner(peers.size)
-            Spacer(modifier = Modifier.height(16.dp))
+            item(key = "mesh_status_banner") {
+                MeshStatusBanner(peers.size)
+            }
 
             // Emergency SOS Action Card
-            EmergencySosCard(onSendSosClick = { onNavigate(Screen.SEND_SOS) })
-            Spacer(modifier = Modifier.height(14.dp))
+            item(key = "emergency_sos_card") {
+                EmergencySosCard(onSendSosClick = { onNavigate(Screen.SEND_SOS) })
+            }
 
             // Emergency Contacts Quick Action
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigate(Screen.EMERGENCY_CONTACTS) },
-                colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, colors.divider)
-            ) {
-                Row(
+            item(key = "emergency_contacts_quick") {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clickable { onNavigate(Screen.EMERGENCY_CONTACTS) },
+                    colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, colors.divider)
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .size(38.dp)
-                            .background(colors.primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(colors.primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContactPhone,
+                                contentDescription = null,
+                                tint = colors.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Emergency Contacts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Manage trusted contacts for SOS dispatch", color = colors.textSecondary, fontSize = 12.sp)
+                        }
                         Icon(
-                            imageVector = Icons.Outlined.ContactPhone,
+                            imageVector = Icons.Outlined.ChevronRight,
                             contentDescription = null,
-                            tint = colors.primary,
+                            tint = colors.textSecondary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Emergency Contacts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Manage trusted contacts for SOS dispatch", color = colors.textSecondary, fontSize = 12.sp)
-                    }
-                    Icon(
-                        imageVector = Icons.Outlined.ChevronRight,
-                        contentDescription = null,
-                        tint = colors.textSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
 
             // Active Emergency Alerts Section
-            Text(
-                text = "ACTIVE EMERGENCY ALERTS",
-                color = colors.textSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ActiveAlertsSection(
-                alerts = alerts,
-                localNodeId = localNodeId,
-                acknowledgedIds = acknowledgedIds,
-                onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Network Reach Section
-            Text(
-                text = "NETWORK REACH",
-                color = colors.textSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            val maxHops = if (peers.isEmpty()) 0 else peers.maxOf { it.hopDistance }
-            val lastAlert = alerts.maxByOrNull { it.timestamp }
-            val lastBroadcastTime = if (lastAlert != null) {
-                java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastAlert.timestamp))
-            } else {
-                "None"
-            }
-            val deliveryStatus = if (peers.isNotEmpty()) "100% (Mesh)" else if (alerts.isNotEmpty()) "Relayed" else "Standby"
-
-            NetworkReachSection(
-                reachableCount = peers.size,
-                maxHops = maxHops,
-                lastBroadcastTime = lastBroadcastTime,
-                deliveryStatus = deliveryStatus
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Recent Activity Section
-            Text(
-                text = "RECENT ACTIVITY",
-                color = colors.textSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            RecentActivitySection(
-                alerts = alerts,
-                acknowledgedIds = acknowledgedIds
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Quick Action Buttons Grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                QuickActionButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Campaign,
-                    title = "Broadcast\nSOS",
-                    onClick = { onNavigate(Screen.SEND_SOS) }
-                )
-                QuickActionButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.RssFeed,
-                    title = "Emergency\nContacts",
-                    onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Emergency Contacts Full Width Button
-            Button(
-                onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = colors.cardBackground),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, colors.divider)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Outlined.ContactEmergency, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
+            item(key = "active_alerts_section") {
+                Column {
                     Text(
-                        text = "Manage Emergency Contacts",
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        text = "ACTIVE EMERGENCY ALERTS",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ActiveAlertsSection(
+                        alerts = alerts,
+                        localNodeId = localNodeId,
+                        acknowledgedIds = acknowledgedIds,
+                        onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // Network Reach Section
+            item(key = "network_reach_section") {
+                val maxHops = if (peers.isEmpty()) 0 else peers.maxOf { it.hopDistance }
+                val lastAlert = alerts.maxByOrNull { it.timestamp }
+                val lastBroadcastTime = if (lastAlert != null) {
+                    java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastAlert.timestamp))
+                } else {
+                    "None"
+                }
+                val deliveryStatus = if (peers.isNotEmpty()) "100% (Mesh)" else if (alerts.isNotEmpty()) "Relayed" else "Standby"
+
+                Column {
+                    Text(
+                        text = "NETWORK REACH",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    NetworkReachSection(
+                        reachableCount = peers.size,
+                        maxHops = maxHops,
+                        lastBroadcastTime = lastBroadcastTime,
+                        deliveryStatus = deliveryStatus
+                    )
+                }
+            }
+
+            // Recent Activity Section
+            item(key = "recent_activity_section") {
+                Column {
+                    Text(
+                        text = "RECENT ACTIVITY",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    RecentActivitySection(
+                        alerts = alerts,
+                        acknowledgedIds = acknowledgedIds
+                    )
+                }
+            }
+
+            // Quick Action Buttons Grid
+            item(key = "quick_actions_row") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.Campaign,
+                        title = "Broadcast\nSOS",
+                        onClick = { onNavigate(Screen.SEND_SOS) }
+                    )
+                    QuickActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Outlined.RssFeed,
+                        title = "Emergency\nContacts",
+                        onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) }
+                    )
+                }
+            }
+
+            // Emergency Contacts Full Width Button
+            item(key = "manage_contacts_button") {
+                Button(
+                    onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.cardBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, colors.divider)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Outlined.ContactEmergency, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Manage Emergency Contacts",
+                            color = colors.textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
 
             // How SOS Works Footer Card
-            HowSosWorksCard()
-
-            Spacer(modifier = Modifier.height(32.dp))
+            item(key = "how_sos_works_card") {
+                HowSosWorksCard()
+            }
         }
     }
 }

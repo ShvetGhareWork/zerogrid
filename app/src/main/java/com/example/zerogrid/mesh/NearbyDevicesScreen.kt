@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -55,30 +57,65 @@ fun NearbyDevicesScreen(
     }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { NearbyTopBar(onBackClick = onBackClick) },
         bottomBar = { ZeroGridBottomBar(currentScreen = Screen.MESH, onNavigate = onNavigate) }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            MeshDiscoveryCard(peers.size)
-            Spacer(modifier = Modifier.height(16.dp))
-            RadarGraphicCard(peersCount = peers.size)
-            Spacer(modifier = Modifier.height(16.dp))
-            FilterChipsRow(selected = selectedFilter, onSelected = { selectedFilter = it })
-            Spacer(modifier = Modifier.height(16.dp))
-            DevicesListSection(
-                peers = filteredPeers,
-                onOpenPeerDetails = onOpenPeerDetails,
-                onOpenPeerChat = onOpenPeerChat
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+            item(key = "discovery_card") {
+                MeshDiscoveryCard(peers.size)
+            }
+            item(key = "radar_card") {
+                RadarGraphicCard(peersCount = peers.size)
+            }
+            item(key = "filter_chips") {
+                FilterChipsRow(selected = selectedFilter, onSelected = { selectedFilter = it })
+            }
+            if (filteredPeers.isEmpty()) {
+                item(key = "empty_devices") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Outlined.Devices,
+                                contentDescription = null,
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = "No mesh devices discovered yet", color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = "Bring another ZeroGrid device closer or ensure radio is enabled.", color = colors.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            } else {
+                items(filteredPeers, key = { it.nodeId }, contentType = { "PeerDevice" }) { peer ->
+                    DeviceCard(
+                        icon = if (peer.transportType == MeshNode.TRANSPORT_BLE) Icons.Outlined.Bluetooth else Icons.Outlined.Wifi,
+                        name = peer.alias,
+                        status = if (peer.hopDistance == 1) "Direct • ${peer.transportType}" else "${peer.hopDistance} hops via Mesh",
+                        subStatus = "Node ID: ${peer.nodeId.takeLast(6)}",
+                        signalBars = if (peer.rssi > -60) 4 else if (peer.rssi > -80) 2 else 1,
+                        onViewClick = { onOpenPeerDetails(peer.nodeId) },
+                        onChatClick = { onOpenPeerChat(peer.nodeId) }
+                    )
+                }
+            }
+            item(key = "bottom_spacer") {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }

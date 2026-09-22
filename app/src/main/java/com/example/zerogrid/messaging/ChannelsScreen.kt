@@ -3,6 +3,7 @@ package com.example.zerogrid.messaging
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,83 +37,94 @@ fun ChannelsScreen(onNavigate: (Screen) -> Unit = {}) {
     val colors = ZeroGridTheme.colors
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { ChannelsTopBar(onBackClick = { onNavigate(Screen.MESSAGES) }) },
         bottomBar = { ZeroGridBottomBar(currentScreen = Screen.MESSAGES, onNavigate = onNavigate) }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            MeshActiveStatusBarChannels(peersCount = peers.size)
-            Spacer(modifier = Modifier.height(16.dp))
-            ChannelFilterChipsRow(selected = selectedFilter, onSelected = { selectedFilter = it })
-            Spacer(modifier = Modifier.height(20.dp))
+            item(key = "status_bar") {
+                MeshActiveStatusBarChannels(peersCount = peers.size)
+            }
+            item(key = "filter_chips") {
+                ChannelFilterChipsRow(selected = selectedFilter, onSelected = { selectedFilter = it })
+            }
 
             if (selectedFilter == "All" || selectedFilter == "Emergency") {
-                Text(
-                    text = "EMERGENCY",
-                    color = colors.textSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                EmergencyChannelSection(
-                    alertsCount = alerts.size,
-                    onClick = { onNavigate(Screen.SOS_CENTER) }
-                )
-                Spacer(modifier = Modifier.height(20.dp))
+                item(key = "emergency_section") {
+                    Column {
+                        Text(
+                            text = "EMERGENCY",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        EmergencyChannelSection(
+                            alertsCount = alerts.size,
+                            onClick = { onNavigate(Screen.SOS_CENTER) }
+                        )
+                    }
+                }
             }
 
             if (selectedFilter == "All" || selectedFilter == "Public") {
-                Text(
-                    text = "PUBLIC",
-                    color = colors.textSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                PublicChannelsSection(
-                    peersCount = peers.size,
-                    onOpenBroadcast = { onNavigate(Screen.MESSAGES) }
-                )
-                Spacer(modifier = Modifier.height(20.dp))
+                item(key = "public_section") {
+                    Column {
+                        Text(
+                            text = "PUBLIC",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PublicChannelsSection(
+                            peersCount = peers.size,
+                            onOpenBroadcast = { onNavigate(Screen.MESSAGES) }
+                        )
+                    }
+                }
             }
 
             if (selectedFilter == "All" || selectedFilter == "Private") {
-                Text(
-                    text = "PRIVATE",
-                    color = colors.textSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                PrivateChannelsSection(
-                    onOpenDirect = { onNavigate(Screen.MESH) }
-                )
-                Spacer(modifier = Modifier.height(20.dp))
+                item(key = "private_section") {
+                    Column {
+                        Text(
+                            text = "PRIVATE",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PrivateChannelsSection(
+                            onOpenDirect = { onNavigate(Screen.MESH) }
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Channels are local to the ZeroGrid mesh.",
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
+            item(key = "footer_note") {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Channels are local to the ZeroGrid mesh.",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

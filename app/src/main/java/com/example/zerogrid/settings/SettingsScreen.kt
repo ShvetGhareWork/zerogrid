@@ -281,7 +281,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = {
             ZeroGridTopBar(
                 peerCount = peers.size,

@@ -2,6 +2,7 @@ package com.example.zerogrid.messaging
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -195,6 +196,7 @@ enum class MessageStatus {
     DELIVERED
 }
 
+@Immutable
 data class StoredMessage(
     val id: String,
     val senderId: String,

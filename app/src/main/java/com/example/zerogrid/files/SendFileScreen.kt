@@ -32,12 +32,17 @@ import com.example.zerogrid.navigation.Screen
 import com.example.zerogrid.navigation.ZeroGridBottomBar
 import com.example.zerogrid.ui.theme.*
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 @Composable
 fun SendFileScreen(onNavigate: (Screen) -> Unit = {}) {
     val context = LocalContext.current
     val meshEngine = MeshEngine.getInstance(context)
     val peers by meshEngine.connectedPeers.collectAsState()
     val colors = ZeroGridTheme.colors
+    val scope = rememberCoroutineScope()
 
     var selectedPermission by remember { mutableStateOf("Downloadable") }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
@@ -48,11 +53,18 @@ fun SendFileScreen(onNavigate: (Screen) -> Unit = {}) {
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedFileUri = uri
-        selectedFileName = uri?.lastPathSegment?.substringAfterLast('/') ?: "Selected Document"
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected Document"
+                withContext(Dispatchers.Main) {
+                    selectedFileName = name
+                }
+            }
+        }
     }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { SendFileTopBar(onBackClick = { onNavigate(Screen.FILES) }) },
         bottomBar = { ZeroGridBottomBar(currentScreen = Screen.FILES, onNavigate = onNavigate) }
     ) { paddingValues ->

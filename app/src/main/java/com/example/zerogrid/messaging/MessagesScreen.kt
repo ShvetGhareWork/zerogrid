@@ -12,7 +12,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
+
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +33,17 @@ import com.example.zerogrid.ui.theme.ZeroGridTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+@Immutable
+data class ChatSummaryUiModel(
+    val peerId: String,
+    val alias: String,
+    val isOnline: Boolean,
+    val hopDistance: Int,
+    val lastMessage: String,
+    val timestamp: Long,
+    val unreadCount: Int
+)
 
 @Composable
 fun MessagesScreen(
@@ -72,18 +85,40 @@ fun MessagesScreen(
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Direct Chats, 1: Channels
     var searchQuery by remember { mutableStateOf("") }
 
-    // Filter peers by search query
-    val displayPeerIds = remember(allChatPeerIds, searchQuery, conversations, filteredPeers) {
-        allChatPeerIds.filter { peerId ->
-            val alias = filteredPeers.find { it.nodeId == peerId }?.alias ?: meshEngine.getPeerDisplayName(peerId)
-            val lastMsg = conversations[peerId]?.lastOrNull()?.text ?: ""
-            if (searchQuery.isBlank()) true
-            else alias.contains(searchQuery, ignoreCase = true) || lastMsg.contains(searchQuery, ignoreCase = true)
+    // Fast O(1) peer lookup map to eliminate linear searches during list building
+    val peerMap = remember(filteredPeers) { filteredPeers.associateBy { it.nodeId } }
+
+    // Precomputed immutable UI model list: eliminates heavy calculations, unread counts, and lookups during item composition
+    val displayChats = remember(allChatPeerIds, searchQuery, conversations, peerMap) {
+        allChatPeerIds.mapNotNull { peerId ->
+            val peer = peerMap[peerId]
+            val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
+            val messages = conversations[peerId] ?: emptyList()
+            val lastMsg = messages.lastOrNull()
+            val lastMsgText = lastMsg?.text ?: "Ready to connect over mesh"
+
+            if (searchQuery.isNotBlank() &&
+                !alias.contains(searchQuery, ignoreCase = true) &&
+                !lastMsgText.contains(searchQuery, ignoreCase = true)
+            ) {
+                return@mapNotNull null
+            }
+
+            val unreadCount = messages.count { !it.isMine }
+            ChatSummaryUiModel(
+                peerId = peerId,
+                alias = alias,
+                isOnline = peer != null,
+                hopDistance = peer?.hopDistance ?: -1,
+                lastMessage = lastMsgText,
+                timestamp = lastMsg?.timestamp ?: System.currentTimeMillis(),
+                unreadCount = unreadCount
+            )
         }
     }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: let root Scaffold own background
         topBar = {
             ZeroGridTopBar(
                 peerCount = filteredPeers.size,
@@ -294,8 +329,8 @@ fun MessagesScreen(
 
                 if (selectedTab == 0) {
                     // Direct Chats List
-                    if (displayPeerIds.isEmpty()) {
-                        item {
+                    if (displayChats.isEmpty()) {
+                        item(key = "empty_messages") {
                             Box(
                                 modifier = Modifier
                                     .widthIn(max = 840.dp)
@@ -311,13 +346,7 @@ fun MessagesScreen(
                             }
                         }
                     } else {
-                        items(displayPeerIds, key = { it }) { peerId ->
-                            val peer = filteredPeers.find { it.nodeId == peerId }
-                            val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
-                            val messages = conversations[peerId] ?: emptyList()
-                            val lastMsg = messages.lastOrNull()
-                            val unreadCount = messages.count { !it.isMine }
-
+                        items(displayChats, key = { it.peerId }, contentType = { "ChatSummary" }) { chat ->
                             Box(
                                 modifier = Modifier
                                     .widthIn(max = 840.dp)
@@ -325,13 +354,13 @@ fun MessagesScreen(
                                     .padding(vertical = 5.dp)
                             ) {
                                 RecentChatCard(
-                                    alias = alias,
-                                    isOnline = peer != null,
-                                    hopDistance = peer?.hopDistance ?: -1,
-                                    lastMessage = lastMsg?.text ?: "Ready to connect over mesh",
-                                    timestamp = lastMsg?.timestamp ?: System.currentTimeMillis(),
-                                    unreadCount = unreadCount,
-                                    onClick = { onOpenPeerChat?.invoke(peerId) }
+                                    alias = chat.alias,
+                                    isOnline = chat.isOnline,
+                                    hopDistance = chat.hopDistance,
+                                    lastMessage = chat.lastMessage,
+                                    timestamp = chat.timestamp,
+                                    unreadCount = chat.unreadCount,
+                                    onClick = { onOpenPeerChat?.invoke(chat.peerId) }
                                 )
                             }
                         }

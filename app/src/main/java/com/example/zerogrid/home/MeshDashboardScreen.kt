@@ -54,7 +54,7 @@ fun MeshDashboardScreen(
     val batteryPercent = remember { getBatteryPercentage(context) }
 
     Scaffold(
-        containerColor = colors.background,
+        containerColor = Color.Transparent, // Overdraw elimination: let root Scaffold own background
         topBar = {
             ZeroGridTopBar(
                 peerCount = peers.size,
@@ -79,88 +79,128 @@ fun MeshDashboardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                item {
+                // 1. Hero Mesh Status Card
+                item(key = "hero_mesh_status", contentType = "HeroCard") {
                     Box(
                         modifier = Modifier
                             .widthIn(max = 840.dp)
                             .fillMaxWidth()
                     ) {
-                        Column {
-                            // Hero Mesh Status Card
-                            MeshActiveHeroCard(
-                                peersCount = peers.size,
-                                relayedPeersCount = peers.count { it.hopDistance > 1 },
-                                activeChannelMode = activeChannelMode,
-                                batteryPercent = batteryPercent,
-                                onScanClick = { onNavigate(Screen.MESH) }
-                            )
+                        MeshActiveHeroCard(
+                            peersCount = peers.size,
+                            relayedPeersCount = peers.count { it.hopDistance > 1 },
+                            activeChannelMode = activeChannelMode,
+                            batteryPercent = batteryPercent,
+                            onScanClick = { onNavigate(Screen.MESH) }
+                        )
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(20.dp))
+                item(key = "spacer_hero") {
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
 
-                            // Communication Channel Switcher Card
-                            ChannelSwitcherCard(
-                                activeChannelMode = activeChannelMode,
-                                onSelectChannel = { meshEngine.setMeshChannelMode(it) }
-                            )
+                // 2. Communication Channel Switcher Card
+                item(key = "channel_switcher", contentType = "ChannelSwitcher") {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        ChannelSwitcherCard(
+                            activeChannelMode = activeChannelMode,
+                            onSelectChannel = { meshEngine.setMeshChannelMode(it) }
+                        )
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
+                item(key = "spacer_switcher") {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
 
-                            // Quick Actions Header
+                // 3. Quick Actions Header
+                item(key = "quick_actions_header") {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "QUICK ACTIONS",
+                            color = colors.textSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                item(key = "spacer_qa") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // 4. Quick Actions Responsive Grid
+                item(key = "quick_actions_grid", contentType = "QuickActions") {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        QuickActionsGrid(
+                            isTablet = isTablet,
+                            sosAlertsCount = sosAlerts.size,
+                            onNavigate = onNavigate
+                        )
+                    }
+                }
+
+                item(key = "spacer_qa_grid") {
+                    Spacer(modifier = Modifier.height(28.dp))
+                }
+
+                // 5. Nearby People & Devices Section Header
+                item(key = "nearby_header") {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "QUICK ACTIONS",
+                                text = "NEARBY PEOPLE & DEVICES",
                                 color = colors.textSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
                                 letterSpacing = 1.sp
                             )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Quick Actions Responsive Grid
-                            QuickActionsGrid(
-                                isTablet = isTablet,
-                                sosAlertsCount = sosAlerts.size,
-                                onNavigate = onNavigate
-                            )
-
-                            Spacer(modifier = Modifier.height(28.dp))
-
-                            // Nearby People & Devices Section Header
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            TextButton(
+                                onClick = { onNavigate(Screen.MESH) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = "NEARBY PEOPLE & DEVICES",
-                                    color = colors.textSecondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 1.sp
+                                    text = "View All (${peers.size})",
+                                    color = colors.primary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
-                                TextButton(
-                                    onClick = { onNavigate(Screen.MESH) },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "View All (${peers.size})",
-                                        color = colors.primary,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
 
+                item(key = "spacer_nearby") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 // Dynamic Nearby Peers List
                 if (peers.isEmpty()) {
-                    item {
+                    item(key = "zero_peers") {
                         Box(
                             modifier = Modifier
                                 .widthIn(max = 840.dp)
@@ -170,7 +210,7 @@ fun MeshDashboardScreen(
                         }
                     }
                 } else {
-                    items(peers.take(6), key = { it.nodeId }) { peer ->
+                    items(peers.take(6), key = { it.nodeId }, contentType = { "NearbyPeer" }) { peer ->
                         Box(
                             modifier = Modifier
                                 .widthIn(max = 840.dp)
@@ -186,7 +226,7 @@ fun MeshDashboardScreen(
                     }
                 }
 
-                item {
+                item(key = "bottom_spacer") {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
