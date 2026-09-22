@@ -104,14 +104,14 @@ class MeshRoutingEngine(
             )
 
             activeTransports.forEach { transport ->
-                if (transport != sourceTransport && transport.isRunning) {
+                if (transport.isRunning) {
                     Log.d(
                         TAG,
-                        "Relaying packet ${relayedPacket.packetId} to neighbor via ${transport.transportName} (Remaining TTL=${relayedPacket.ttl})"
+                        "Relaying packet ${relayedPacket.packetId} to neighbor via ${transport.transportName} (Remaining TTL=${relayedPacket.ttl}, Hops=${relayedPacket.hopCount})"
                     )
                     DebugLogger.log(
                         TAG,
-                        "🔄 Relaying packet ${relayedPacket.packetId} via ${transport.transportName} (TTL=${relayedPacket.ttl})",
+                        "🔄 Relaying packet ${relayedPacket.packetId} via ${transport.transportName} (TTL=${relayedPacket.ttl}, Hops=${relayedPacket.hopCount})",
                         DebugLevel.DEBUG
                     )
                     transport.sendPacket(relayedPacket)

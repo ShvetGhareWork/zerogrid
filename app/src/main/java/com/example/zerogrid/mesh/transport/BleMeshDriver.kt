@@ -495,10 +495,13 @@ class BleMeshDriver(
     override fun sendPacket(packet: MeshPacket, targetPeerId: String?): Boolean {
         if (!isRunning || bluetoothAdapter == null) return false
 
-        // Check reachability early for direct messages
+        // Check reachability for direct messages
         val directTarget = targetPeerId ?: if (packet.recipientId != MeshPacket.BROADCAST_ADDRESS && packet.recipientId != "*") packet.recipientId else null
-        if (directTarget != null && resolveDeviceForPeerId(directTarget) == null) {
-            DebugLogger.log(TAG, "Target peer $directTarget not reachable via BLE right now", DebugLevel.WARN)
+        val directDevice = directTarget?.let { resolveDeviceForPeerId(it) }
+
+        // If target is specified but not directly connected, check if any BLE mesh peers exist to relay through
+        if (directTarget != null && directDevice == null && getAllAvailableDevices().isEmpty()) {
+            DebugLogger.log(TAG, "Target peer $directTarget not reachable and no mesh peers available", DebugLevel.WARN)
             return false
         }
 
@@ -506,16 +509,11 @@ class BleMeshDriver(
             val payloadBytes   = packet.toByteArray()
             val transmissionId = UUID.randomUUID()
 
-            // Resolve target devices by logical NodeID first, then MAC address
+            // Resolve target devices:
+            // 1. If direct device resolved, send directly
+            // 2. Otherwise (broadcast OR multi-hop message), forward to available mesh neighbor devices
             val targets: List<BluetoothDevice> = when {
-                targetPeerId != null -> {
-                    val device = resolveDeviceForPeerId(targetPeerId)
-                    listOfNotNull(device)
-                }
-                packet.recipientId != MeshPacket.BROADCAST_ADDRESS && packet.recipientId != "*" -> {
-                    val device = resolveDeviceForPeerId(packet.recipientId)
-                    if (device != null) listOf(device) else getAllAvailableDevices()
-                }
+                directDevice != null -> listOf(directDevice)
                 else -> getAllAvailableDevices()
             }
 
@@ -524,10 +522,18 @@ class BleMeshDriver(
                 return@launch
             }
 
+            // Exclude sender device handle from target list to prevent immediate transmitter echo
+            val senderDevice = resolveDeviceForPeerId(packet.senderId)
+            val filteredTargets = if (senderDevice != null && targets.size > 1) {
+                targets.filter { it.address != senderDevice.address }
+            } else {
+                targets
+            }
+
             // Deduplicate targets by MAC address — prevents sending to multiple stale RPAs
             // that all resolve to the same physical device in nodeToDeviceMap.
-            val deduped = targets.distinctBy { it.address }
-            DebugLogger.log(TAG, "📤 Sending ${packet.type} packet [${payloadBytes.size}B] to ${deduped.size} peer(s)", DebugLevel.INFO)
+            val deduped = filteredTargets.distinctBy { it.address }
+            DebugLogger.log(TAG, "📤 Sending ${packet.type} packet [${payloadBytes.size}B] to ${deduped.size} peer(s) (Hops=${packet.hopCount}, TTL=${packet.ttl})", DebugLevel.INFO)
             // Enqueue jobs into the serialized worker — no concurrent GATT connections
             deduped.forEach { device ->
                 gattSendQueue.trySend(GattSendJob(device, transmissionId, payloadBytes))
@@ -910,15 +916,19 @@ class BleMeshDriver(
                 rssi = -35,
                 metadata = mapOf("alias" to peerAlias)
             )
+            val isDirect = packet.hopCount <= 0
+            val hops = (packet.hopCount + 1).coerceAtLeast(1)
+            val immediateRelayId = addressToNodeMap[sourceAddress]
             val peerNode = MeshNode(
                 nodeId = packet.senderId,
                 alias = peerAlias,
-                rssi = -35,
-                transportType = MeshNode.TRANSPORT_BLE,
-                bleRssi = -35,
+                rssi = if (isDirect) -35 else (-60 - (hops * 10)).coerceAtLeast(-95),
+                transportType = if (isDirect) MeshNode.TRANSPORT_BLE else MeshNode.TRANSPORT_MULTI_HOP,
+                bleRssi = if (isDirect) -35 else null,
                 lastSeenTimestamp = System.currentTimeMillis(),
-                hopDistance = 1,
-                isDirectNeighbor = true,
+                hopDistance = hops,
+                isDirectNeighbor = isDirect,
+                nextHopNodeId = if (isDirect) null else immediateRelayId,
                 availableTransports = mutableSetOf(MeshNode.TRANSPORT_BLE)
             )
             scope.launch { _peerDiscoveryFlow.emit(peerNode) }

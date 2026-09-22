@@ -17,6 +17,7 @@ data class MeshNode(
     var lastSeenTimestamp: Long = System.currentTimeMillis(),
     var hopDistance: Int = 1,
     var isDirectNeighbor: Boolean = true,
+    var nextHopNodeId: String? = null,
     val availableTransports: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 ) {
     companion object {

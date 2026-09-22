@@ -523,15 +523,17 @@ class MeshEngine private constructor(private val context: Context) {
                     if (packet.payload.isNotBlank()) {
                         messageStore.savePeerAlias(packet.senderId, packet.payload.trim())
                     }
+                    val isDirect = packet.hopCount <= 0
+                    val hops = (packet.hopCount + 1).coerceAtLeast(1)
                     val peerNode = MeshNode(
                         nodeId = packet.senderId,
                         alias = peerAlias,
-                        rssi = -35,
-                        transportType = MeshNode.TRANSPORT_BLE,
-                        bleRssi = -35,
+                        rssi = if (isDirect) -35 else (-60 - (hops * 10)).coerceAtLeast(-95),
+                        transportType = if (isDirect) MeshNode.TRANSPORT_BLE else MeshNode.TRANSPORT_MULTI_HOP,
+                        bleRssi = if (isDirect) -35 else null,
                         lastSeenTimestamp = System.currentTimeMillis(),
-                        hopDistance = packet.hopCount.coerceAtLeast(1),
-                        isDirectNeighbor = packet.hopCount <= 1,
+                        hopDistance = hops,
+                        isDirectNeighbor = isDirect,
                         availableTransports = mutableSetOf(MeshNode.TRANSPORT_BLE)
                     )
                     peerTable.updateOrAddPeer(peerNode)

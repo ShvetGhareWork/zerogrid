@@ -74,10 +74,36 @@ class PeerTable(var localNodeId: String? = null) {
                 existing.alias = node.alias
             }
 
-            if (node.hopDistance < existing.hopDistance) {
+            if (node.hopDistance <= existing.hopDistance) {
                 existing.hopDistance = node.hopDistance
+                existing.isDirectNeighbor = node.isDirectNeighbor
+                if (node.nextHopNodeId != null) {
+                    existing.nextHopNodeId = node.nextHopNodeId
+                }
+            } else if (existing.nextHopNodeId == null && node.nextHopNodeId != null) {
+                existing.nextHopNodeId = node.nextHopNodeId
             }
         }
+    }
+
+    /**
+     * Resolves the immediate 1-hop physical neighbor node ID used to route packets to a target peer.
+     * Returns the target itself if directly reachable, or the next-hop relay node ID.
+     */
+    fun getNextHop(nodeId: String): String? = synchronized(lock) {
+        val directMatch = peers[nodeId]
+        if (directMatch != null) {
+            if (directMatch.isDirectNeighbor) return nodeId
+            return directMatch.nextHopNodeId ?: nodeId
+        }
+        val suffixMatch = peers.entries.firstOrNull { 
+            it.key.removePrefix("NODE-").equals(nodeId.removePrefix("NODE-"), ignoreCase = true) 
+        }?.value
+        if (suffixMatch != null) {
+            if (suffixMatch.isDirectNeighbor) return suffixMatch.nodeId
+            return suffixMatch.nextHopNodeId ?: suffixMatch.nodeId
+        }
+        return null
     }
 
     /**
