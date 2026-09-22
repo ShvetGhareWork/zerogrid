@@ -23,6 +23,7 @@ enum class Screen {
     DEBUG_CONSOLE,
     EMERGENCY_CONTACTS,
     FAMILY_LINKS,
-    PROFILE
+    PROFILE,
+    TRACK_SOS
 }
 

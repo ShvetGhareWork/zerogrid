@@ -32,7 +32,10 @@ import com.example.zerogrid.navigation.ZeroGridBottomBar
 import com.example.zerogrid.ui.theme.*
 
 @Composable
-fun SosCenterScreen(onNavigate: (Screen) -> Unit = {}) {
+fun SosCenterScreen(
+    onNavigate: (Screen) -> Unit = {},
+    onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
+) {
     val meshEngine = MeshEngine.getInstance(LocalContext.current)
     val alerts by meshEngine.sosAlerts.collectAsState()
     val peers by meshEngine.connectedPeers.collectAsState()
@@ -121,7 +124,8 @@ fun SosCenterScreen(onNavigate: (Screen) -> Unit = {}) {
                         alerts = alerts,
                         localNodeId = localNodeId,
                         acknowledgedIds = acknowledgedIds,
-                        onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) }
+                        onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) },
+                        onTrackSos = onTrackSos
                     )
                 }
             }
@@ -372,7 +376,13 @@ private fun EmergencySosCard(onSendSosClick: () -> Unit = {}) {
 }
 
 @Composable
-private fun ActiveAlertsSection(alerts: List<MeshPacket>, localNodeId: String, acknowledgedIds: Set<String>, onAcknowledge: (String) -> Unit) {
+private fun ActiveAlertsSection(
+    alerts: List<MeshPacket>,
+    localNodeId: String,
+    acknowledgedIds: Set<String>,
+    onAcknowledge: (String) -> Unit,
+    onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
+) {
     val colors = ZeroGridTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (alerts.isEmpty()) {
@@ -507,6 +517,45 @@ private fun ActiveAlertsSection(alerts: List<MeshPacket>, localNodeId: String, a
                                 lineHeight = 20.sp,
                                 modifier = Modifier.padding(12.dp)
                             )
+                        }
+
+                        // TRACK LOCATION button — only shown for incoming alerts with valid GPS
+                        val sosCoords = alert.getSosCoordinates()
+                        if (!isMine && sosCoords != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    onTrackSos?.invoke(
+                                        sosCoords.first,
+                                        sosCoords.second,
+                                        alert.senderId.takeLast(6),
+                                        alert.getSosCategory(),
+                                        alert.timestamp
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().height(36.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF1A237E).copy(alpha = 0.3f)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFF5C6BC0).copy(alpha = 0.8f)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Explore,
+                                    contentDescription = null,
+                                    tint = Color(0xFF9FA8DA),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "TRACK LOCATION",
+                                    color = Color(0xFF9FA8DA),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
                         }
 
                         if (!isMine && !isAcknowledged) {

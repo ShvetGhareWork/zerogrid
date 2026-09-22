@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.example.zerogrid.hardware.HardwareStateManager
 import com.example.zerogrid.hardware.WifiRequiredDialog
+import com.example.zerogrid.location.LocationHelper
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.mesh.engine.MeshNode
 import com.example.zerogrid.navigation.Screen
@@ -41,7 +42,26 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     var selectedType by remember { mutableStateOf("Medical") }
     var emergencyMessage by remember { mutableStateOf("") }
     var locationSharingEnabled by remember { mutableStateOf(true) }
+    // Live GPS state shown in the location card
+    var gpsLat by remember { mutableStateOf<Double?>(null) }
+    var gpsLng by remember { mutableStateOf<Double?>(null) }
+    var gpsAccuracy by remember { mutableStateOf<Float?>(null) }
+    var gpsFetching by remember { mutableStateOf(false) }
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
+
+    // Eagerly fetch GPS when location sharing is enabled
+    LaunchedEffect(locationSharingEnabled) {
+        if (locationSharingEnabled) {
+            gpsFetching = true
+            val result = LocationHelper.getCurrentLocation(context)
+            gpsLat = result?.lat
+            gpsLng = result?.lng
+            gpsAccuracy = result?.accuracy
+            gpsFetching = false
+        } else {
+            gpsLat = null; gpsLng = null; gpsAccuracy = null
+        }
+    }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -97,10 +117,14 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
             )
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Location Sharing Card
+            // Location Sharing Card with live GPS status
             LocationSharingCard(
                 checked = locationSharingEnabled,
-                onCheckedChange = { locationSharingEnabled = it }
+                onCheckedChange = { locationSharingEnabled = it },
+                lat = gpsLat,
+                lng = gpsLng,
+                accuracy = gpsAccuracy,
+                isFetching = gpsFetching
             )
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -175,9 +199,17 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
             Button(
                 onClick = {
                     coroutineScope.launch {
+                        // Acquire fresh GPS right before dispatch so coords are up-to-date
+                        val (lat, lng, accuracy) = if (locationSharingEnabled) {
+                            val r = LocationHelper.getCurrentLocation(context)
+                            Triple(r?.lat, r?.lng, r?.accuracy)
+                        } else {
+                            Triple(null, null, null)
+                        }
                         sosDispatcher.triggerSos(
-                            lat = if (locationSharingEnabled) 0.0 else null,
-                            lng = if (locationSharingEnabled) 0.0 else null,
+                            lat = lat,
+                            lng = lng,
+                            accuracy = accuracy,
                             category = selectedType,
                             message = emergencyMessage
                         )
@@ -406,7 +438,14 @@ private fun EmergencyMessageInput(value: String, onValueChange: (String) -> Unit
 }
 
 @Composable
-private fun LocationSharingCard(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun LocationSharingCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    lat: Double? = null,
+    lng: Double? = null,
+    accuracy: Float? = null,
+    isFetching: Boolean = false
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -423,7 +462,7 @@ private fun LocationSharingCard(checked: Boolean, onCheckedChange: (Boolean) -> 
                     Icon(
                         imageVector = Icons.Outlined.LocationOn,
                         contentDescription = null,
-                        tint = StatusActive,
+                        tint = if (checked && lat != null) StatusActive else TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -435,13 +474,36 @@ private fun LocationSharingCard(checked: Boolean, onCheckedChange: (Boolean) -> 
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Location available",
-                            color = StatusActive,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium
-                        )
+                        when {
+                            !checked -> Text(
+                                text = "Disabled — will not share location",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            isFetching -> Text(
+                                text = "Acquiring GPS fix...",
+                                color = AlertYellow,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            lat != null && lng != null -> Text(
+                                text = "%.5f, %.5f %s".format(
+                                    lat, lng,
+                                    if (accuracy != null) "(±${accuracy.toInt()}m)" else ""
+                                ),
+                                color = StatusActive,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium
+                            )
+                            else -> Text(
+                                text = "GPS unavailable — will retry on send",
+                                color = AlertPink,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
                 Switch(

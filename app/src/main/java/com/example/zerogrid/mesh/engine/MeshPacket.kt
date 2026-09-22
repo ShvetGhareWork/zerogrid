@@ -17,9 +17,88 @@ data class MeshPacket(
     val timestamp: Long = System.currentTimeMillis(),
     val signature: String = ""
 ) {
+    fun toJson(): String {
+        val safePayload = payload.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+        return """{"packetId":"$packetId","senderId":"$senderId","recipientId":"$recipientId","ttl":$ttl,"hopCount":$hopCount,"type":"${type.name}","payload":"$safePayload","timestamp":$timestamp,"signature":"$signature"}"""
+    }
+
+    fun toByteArray(): ByteArray = toJson().toByteArray(Charsets.UTF_8)
+
+    /**
+     * Parses GPS coordinates from an SOS_BEACON payload.
+     *
+     * Supports two formats:
+     * 1. Structured JSON: {"category":"...","message":"...","lat":12.97,"lng":77.59,"accuracy":15.0}
+     * 2. Legacy string:   "Category: MEDICAL | Msg: ... | Lat: 12.97, Lon: 77.59"
+     *
+     * Returns null if coordinates are absent, zero, or unparseable.
+     */
+    fun getSosCoordinates(): Pair<Double, Double>? {
+        if (type != PacketType.SOS_BEACON) return null
+        return try {
+            val json = JSONObject(payload)
+            val lat = json.optDouble("lat", 0.0)
+            val lng = json.optDouble("lng", 0.0)
+            if (lat != 0.0 || lng != 0.0) Pair(lat, lng) else null
+        } catch (_: Exception) {
+            // Fallback: parse legacy pipe-delimited string
+            val lat = Regex("Lat:\\s*([\\-0-9.]+)").find(payload)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            val lng = Regex("Lon:\\s*([\\-0-9.]+)").find(payload)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            if (lat != 0.0 || lng != 0.0) Pair(lat, lng) else null
+        }
+    }
+
+    /** Parses GPS accuracy (meters) from a structured JSON SOS_BEACON payload. */
+    fun getSosAccuracy(): Float? {
+        if (type != PacketType.SOS_BEACON) return null
+        return try {
+            val json = JSONObject(payload)
+            if (json.has("accuracy")) json.getDouble("accuracy").toFloat() else null
+        } catch (_: Exception) { null }
+    }
+
+    /** Parses the SOS category from structured or legacy payload. */
+    fun getSosCategory(): String {
+        return try {
+            JSONObject(payload).optString("category", "OTHER")
+        } catch (_: Exception) {
+            Regex("Category:\\s*([^|]+)").find(payload)?.groupValues?.get(1)?.trim() ?: "OTHER"
+        }
+    }
+
+    /** Parses the SOS message text from structured or legacy payload. */
+    fun getSosMessage(): String {
+        return try {
+            JSONObject(payload).optString("message", "")
+        } catch (_: Exception) {
+            Regex("Msg:\\s*([^|]+)").find(payload)?.groupValues?.get(1)?.trim() ?: payload
+        }
+    }
+
     companion object {
         const val BROADCAST_ADDRESS = "*"
         const val DEFAULT_TTL = 5
+
+        /**
+         * Builds a structured JSON SOS beacon payload string.
+         * Receivers use [getSosCoordinates] / [getSosCategory] to extract fields.
+         */
+        fun buildSosPayload(
+            category: String,
+            message: String,
+            lat: Double,
+            lng: Double,
+            accuracy: Float? = null
+        ): String {
+            val json = JSONObject()
+            json.put("category", category)
+            json.put("message", message)
+            json.put("lat", lat)
+            json.put("lng", lng)
+            if (accuracy != null) json.put("accuracy", accuracy.toDouble())
+            json.put("ts", System.currentTimeMillis())
+            return json.toString()
+        }
 
         fun fromJson(jsonStr: String): MeshPacket? {
             return try {
@@ -61,38 +140,20 @@ data class MeshPacket(
                 val sender = extractString("senderId")
                 if (sender.isEmpty()) return null
 
-                val packetId = extractString("packetId").ifEmpty { UUID.randomUUID().toString() }
-                val recipientId = extractString("recipientId").ifEmpty { BROADCAST_ADDRESS }
-                val typeStr = extractString("type").ifEmpty { PacketType.DIRECT_MESSAGE.name }
-                val payload = extractString("payload")
-                val signature = extractString("signature")
-                val ttl = extractInt("ttl", DEFAULT_TTL)
-                val hopCount = extractInt("hopCount", 0)
-                val timestamp = extractLong("timestamp", System.currentTimeMillis())
-
                 MeshPacket(
-                    packetId = packetId,
+                    packetId = extractString("packetId").ifEmpty { UUID.randomUUID().toString() },
                     senderId = sender,
-                    recipientId = recipientId,
-                    ttl = ttl,
-                    hopCount = hopCount,
-                    type = PacketType.valueOf(typeStr),
-                    payload = payload,
-                    timestamp = timestamp,
-                    signature = signature
+                    recipientId = extractString("recipientId").ifEmpty { BROADCAST_ADDRESS },
+                    ttl = extractInt("ttl", DEFAULT_TTL),
+                    hopCount = extractInt("hopCount", 0),
+                    type = PacketType.valueOf(extractString("type").ifEmpty { PacketType.DIRECT_MESSAGE.name }),
+                    payload = extractString("payload"),
+                    timestamp = extractLong("timestamp", System.currentTimeMillis()),
+                    signature = extractString("signature")
                 )
             } catch (e: Exception) {
                 null
             }
         }
-    }
-
-    fun toJson(): String {
-        val safePayload = payload.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
-        return """{"packetId":"$packetId","senderId":"$senderId","recipientId":"$recipientId","ttl":$ttl,"hopCount":$hopCount,"type":"${type.name}","payload":"$safePayload","timestamp":$timestamp,"signature":"$signature"}"""
-    }
-
-    fun toByteArray(): ByteArray {
-        return toJson().toByteArray(Charsets.UTF_8)
     }
 }

@@ -76,6 +76,12 @@ fun ZeroGridApp(
     }
     val currentSubScreen = subScreenStack.lastOrNull()
     var selectedPeerId by remember { mutableStateOf("") }
+    // Track SOS target coordinates passed from SosCenterScreen alert cards
+    var trackSosLat by remember { mutableStateOf(0.0) }
+    var trackSosLng by remember { mutableStateOf(0.0) }
+    var trackSosName by remember { mutableStateOf("Unknown") }
+    var trackSosCategory by remember { mutableStateOf("SOS") }
+    var trackSosTimestamp by remember { mutableStateOf(0L) }
 
     val currentTabScreen = when (pagerState.currentPage) {
         0 -> Screen.HOME
@@ -157,7 +163,16 @@ fun ZeroGridApp(
             Column(modifier = Modifier.fillMaxSize()) {
                 HardwareRequirementBanner()
 
-                if (currentSubScreen != null) {
+                if (currentSubScreen == Screen.TRACK_SOS) {
+                    TrackSosScreen(
+                        targetLat = trackSosLat,
+                        targetLng = trackSosLng,
+                        targetName = trackSosName,
+                        category = trackSosCategory,
+                        sosTimestamp = trackSosTimestamp,
+                        onBack = { navigateBack() }
+                    )
+                } else if (currentSubScreen != null) {
                     RenderScreen(
                         screen = currentSubScreen!!,
                         selectedPeerId = selectedPeerId,
@@ -194,7 +209,17 @@ fun ZeroGridApp(
                                 }
                             )
                             2 -> FilesScreen(onNavigate = { navigateTo(it) })
-                            3 -> SosCenterScreen(onNavigate = { navigateTo(it) })
+                            3 -> SosCenterScreen(
+                                onNavigate = { navigateTo(it) },
+                                onTrackSos = { lat, lng, name, category, timestamp ->
+                                    trackSosLat = lat
+                                    trackSosLng = lng
+                                    trackSosName = name
+                                    trackSosCategory = category
+                                    trackSosTimestamp = timestamp
+                                    navigateTo(Screen.TRACK_SOS)
+                                }
+                            )
                             4 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
                         }
                     }
@@ -257,6 +282,7 @@ private fun RenderScreen(
             onBack = onBack,
             onLogout = onLogout
         )
+        Screen.TRACK_SOS -> { /* handled in caller with full state */ }
     }
 }
 
@@ -265,7 +291,7 @@ private fun getTabRootScreens(tab: NavTab): List<Screen> {
         NavTab.MESH -> listOf(Screen.HOME, Screen.MESH, Screen.PEER_DETAILS, Screen.NETWORK_STATUS)
         NavTab.MESSAGES -> listOf(Screen.MESSAGES, Screen.CHANNELS, Screen.CHAT_DETAIL, Screen.PEER_DIRECT_CHAT)
         NavTab.FILES -> listOf(Screen.FILES, Screen.SEND_FILE, Screen.FILE_TRANSFER)
-        NavTab.SOS -> listOf(Screen.SOS_CENTER, Screen.SEND_SOS)
+        NavTab.SOS -> listOf(Screen.SOS_CENTER, Screen.SEND_SOS, Screen.TRACK_SOS)
         NavTab.SETTINGS -> listOf(Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE)
     }
 }

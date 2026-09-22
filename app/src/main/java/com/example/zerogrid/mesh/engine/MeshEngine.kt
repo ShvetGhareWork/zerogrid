@@ -432,9 +432,17 @@ class MeshEngine private constructor(private val context: Context) {
         message: String,
         lat: Double? = null,
         lon: Double? = null,
+        accuracy: Float? = null,
         preferredTransport: String? = null
     ): MeshPacket {
-        val payload = "Category: $category | Msg: $message | Lat: ${lat ?: 0.0}, Lon: ${lon ?: 0.0}"
+        // Use structured JSON payload so receiving devices can extract coordinates precisely
+        val payload = MeshPacket.buildSosPayload(
+            category = category,
+            message = message,
+            lat = lat ?: 0.0,
+            lng = lon ?: 0.0,
+            accuracy = accuracy
+        )
         val packet = MeshPacket(
             senderId = localNodeId,
             recipientId = MeshPacket.BROADCAST_ADDRESS,

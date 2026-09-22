@@ -44,7 +44,8 @@ class UnifiedSosDispatcher(
                 category = category,
                 message = message,
                 lat = lat,
-                lon = lng
+                lon = lng,
+                accuracy = accuracy
             )
             Log.d(TAG, "Mesh SOS beacon successfully broadcasted.")
             true

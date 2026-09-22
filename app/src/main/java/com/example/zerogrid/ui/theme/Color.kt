@@ -46,6 +46,7 @@ val StatusActive = BadgeGreen
 val StatusStable = Color(0xFFE0E0E0)
 val AlertPink = AccentRedBright
 val AlertRedBorder = Color(0x4DEF4444)
+val AlertYellow = Color(0xFFEAB308)
 val SurfaceDarker = SurfaceDarkerDark
 val BottomNavBg = CardBackgroundLight
 val DividerColor = DividerColorLight
