@@ -289,7 +289,7 @@ fun SettingsScreen(
                 onProfileClick = { onNavigate(Screen.PROFILE) }
             )
         },
-        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SETTINGS, onNavigate = onNavigate) }
+//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SETTINGS, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier

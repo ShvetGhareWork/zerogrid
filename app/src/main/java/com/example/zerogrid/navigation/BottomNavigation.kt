@@ -1,9 +1,15 @@
 package com.example.zerogrid.navigation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Folder
@@ -14,6 +20,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -21,8 +29,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.zerogrid.home.MeshDashboardScreen
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.ui.theme.ZeroGridTheme
+import kotlinx.coroutines.launch
 
 enum class NavTab(val label: String, val icon: ImageVector, val screen: Screen) {
     MESH("Mesh", Icons.Outlined.Hub, Screen.HOME),
@@ -30,6 +40,76 @@ enum class NavTab(val label: String, val icon: ImageVector, val screen: Screen) 
     FILES("Files", Icons.Outlined.Folder, Screen.FILES),
     SOS("SOS", Icons.Outlined.WarningAmber, Screen.SOS_CENTER),
     SETTINGS("Settings", Icons.Outlined.Settings, Screen.SETTINGS)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ZeroGridMainScreen(
+    onOpenPeerChat: (String) -> Unit = {}
+) {
+    val pagerState = rememberPagerState(pageCount = { NavTab.entries.size })
+    val coroutineScope = rememberCoroutineScope()
+
+    // Map the active pager page index to your Screen enum for bottom bar selection
+    val currentScreen = when (pagerState.currentPage) {
+        0 -> Screen.HOME
+        1 -> Screen.MESSAGES
+        2 -> Screen.FILES
+        3 -> Screen.SOS_CENTER
+        4 -> Screen.SETTINGS
+        else -> Screen.HOME
+    }
+
+    Scaffold(
+        bottomBar = {
+            ZeroGridBottomBar(
+                currentScreen = currentScreen,
+                onNavigate = { targetScreen ->
+                    val targetIndex = when (targetScreen) {
+                        Screen.HOME, Screen.MESH, Screen.PEER_DETAILS, Screen.NETWORK_STATUS -> 0
+                        Screen.MESSAGES, Screen.CHANNELS, Screen.CHAT_DETAIL, Screen.PEER_DIRECT_CHAT -> 1
+                        Screen.FILES, Screen.SEND_FILE, Screen.FILE_TRANSFER -> 2
+                        Screen.SOS_CENTER, Screen.SEND_SOS -> 3
+                        Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE -> 4
+                        else -> 0
+                    }
+                    // Smoothly scroll the pager when a bottom bar item is tapped
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(targetIndex)
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        // HorizontalPager enables native fluid swiping between screens like WhatsApp
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) { page ->
+            when (page) {
+                0 -> MeshDashboardScreen(
+                    onNavigate = { targetScreen ->
+                        val targetIndex = when (targetScreen) {
+                            Screen.HOME, Screen.MESH -> 0
+                            Screen.MESSAGES, Screen.CHANNELS -> 1
+                            Screen.FILES -> 2
+                            Screen.SOS_CENTER -> 3
+                            Screen.SETTINGS, Screen.PROFILE -> 4
+                            else -> 0
+                        }
+                        coroutineScope.launch { pagerState.animateScrollToPage(targetIndex) }
+                    },
+                    onOpenPeerChat = onOpenPeerChat
+                )
+                1 -> MessagesScreenPlaceholder()
+                2 -> FilesScreenPlaceholder()
+                3 -> SosScreenPlaceholder()
+                4 -> SettingsScreenPlaceholder()
+            }
+        }
+    }
 }
 
 @Composable
@@ -138,3 +218,9 @@ fun ZeroGridBottomBar(
         }
     }
 }
+
+// Placeholders for remaining tab destinations (replace with your actual screens)
+@Composable fun MessagesScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Messages Screen") } }
+@Composable fun FilesScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Files Screen") } }
+@Composable fun SosScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("SOS Screen") } }
+@Composable fun SettingsScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Settings Screen") } }

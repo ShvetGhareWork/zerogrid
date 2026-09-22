@@ -42,7 +42,7 @@ fun SosCenterScreen(onNavigate: (Screen) -> Unit = {}) {
     Scaffold(
         containerColor = colors.background,
         topBar = { EmergencyTopBar(onBackClick = { onNavigate(Screen.HOME) }) },
-        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SOS_CENTER, onNavigate = onNavigate) }
+//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SOS_CENTER, onNavigate = onNavigate) }
     ) { paddingValues ->
         Column(
             modifier = Modifier

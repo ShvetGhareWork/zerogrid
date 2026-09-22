@@ -137,7 +137,7 @@ fun FilesScreen(onNavigate: (Screen) -> Unit = {}) {
                 onProfileClick = { onNavigate(Screen.PROFILE) }
             )
         },
-        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.FILES, onNavigate = onNavigate) }
+//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.FILES, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier

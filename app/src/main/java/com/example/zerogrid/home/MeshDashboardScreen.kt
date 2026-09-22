@@ -1,5 +1,6 @@
 package com.example.zerogrid.home
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -35,6 +36,7 @@ import com.example.zerogrid.ui.components.ZeroGridTopBar
 import com.example.zerogrid.ui.theme.BadgeGreen
 import com.example.zerogrid.ui.theme.ZeroGridTheme
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MeshDashboardScreen(
     onNavigate: (Screen) -> Unit = {},
@@ -60,7 +62,7 @@ fun MeshDashboardScreen(
                 onProfileClick = { onNavigate(Screen.PROFILE) }
             )
         },
-        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.HOME, onNavigate = onNavigate) }
+//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.HOME, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier

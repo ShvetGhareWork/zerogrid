@@ -91,7 +91,7 @@ fun MessagesScreen(
                 onProfileClick = { onNavigate(Screen.PROFILE) }
             )
         },
-        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.MESSAGES, onNavigate = onNavigate) }
+//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.MESSAGES, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
