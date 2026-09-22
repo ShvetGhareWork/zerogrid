@@ -53,7 +53,7 @@ fun SettingsScreen(
     val peers by meshEngine.connectedPeers.collectAsState()
     val themePreferenceManager = remember { ThemePreferenceManager(context.applicationContext) }
     val scope = rememberCoroutineScope()
-    val currentThemeMode by themePreferenceManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+    val currentThemeMode by themePreferenceManager.themeMode.collectAsState(initial = themePreferenceManager.getThemeModeSync())
     val isMeshActive by meshEngine.isMeshActive.collectAsState()
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
     val colors = ZeroGridTheme.colors

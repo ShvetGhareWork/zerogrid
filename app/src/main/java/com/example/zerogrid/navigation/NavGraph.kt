@@ -58,8 +58,23 @@ fun ZeroGridApp(
         it.packetId !in acknowledgedAlertIds && it.senderId != meshEngine.localNodeId
     }
 
-    val pagerState = rememberPagerState(pageCount = { NavTab.entries.size })
-    var currentSubScreen by remember { mutableStateOf<Screen?>(null) }
+    val initialPage = when (initialScreen) {
+        Screen.HOME -> 0
+        Screen.MESSAGES -> 1
+        Screen.FILES -> 2
+        Screen.SOS_CENTER -> 3
+        Screen.SETTINGS -> 4
+        else -> 0
+    }
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { NavTab.entries.size })
+    val subScreenStack = remember {
+        mutableStateListOf<Screen>().apply {
+            if (initialScreen !in setOf(Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS)) {
+                add(initialScreen)
+            }
+        }
+    }
+    val currentSubScreen = subScreenStack.lastOrNull()
     var selectedPeerId by remember { mutableStateOf("") }
 
     val currentTabScreen = when (pagerState.currentPage) {
@@ -71,18 +86,49 @@ fun ZeroGridApp(
         else -> Screen.HOME
     }
 
+    // Only these 5 screens are true pager tab roots — navigating to them scrolls the pager.
+    // ALL other screens (sub-screens like EMERGENCY_CONTACTS, CHANNELS, FAMILY_LINKS, etc.)
+    // must be pushed as currentSubScreen overlays, never as pager tab switches.
+    val tabRootScreens = setOf(
+        Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS
+    )
+
     fun navigateTo(screen: Screen) {
-        val targetTab = NavTab.entries.find { it.screen == screen || getTabRootScreens(it).contains(screen) }
-        if (targetTab != null && currentSubScreen == null) {
-            val index = NavTab.entries.indexOf(targetTab)
+        if (screen in tabRootScreens) {
+            subScreenStack.clear()
+            val index = when (screen) {
+                Screen.HOME -> 0
+                Screen.MESSAGES -> 1
+                Screen.FILES -> 2
+                Screen.SOS_CENTER -> 3
+                Screen.SETTINGS -> 4
+                else -> return
+            }
             coroutineScope.launch { pagerState.animateScrollToPage(index) }
         } else {
-            currentSubScreen = screen
+            // Push sub-screen onto navigation stack (avoid duplicate consecutive pushes)
+            if (subScreenStack.lastOrNull() != screen) {
+                subScreenStack.add(screen)
+            }
         }
     }
 
     fun navigateBack() {
-        currentSubScreen = null
+        if (subScreenStack.isNotEmpty()) {
+            subScreenStack.removeAt(subScreenStack.lastIndex)
+        }
+    }
+
+    // Back-handling Layer 1: If any sub-screens are open, mobile back button pops the top sub-screen
+    BackHandler(enabled = subScreenStack.isNotEmpty()) {
+        navigateBack()
+    }
+
+    // Back-handling Layer 2: If no sub-screens open and not on Home tab, mobile back button returns to Home
+    BackHandler(enabled = subScreenStack.isEmpty() && pagerState.currentPage != 0) {
+        coroutineScope.launch {
+            pagerState.animateScrollToPage(0)
+        }
     }
 
     Scaffold(

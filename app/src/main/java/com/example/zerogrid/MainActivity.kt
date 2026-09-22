@@ -18,11 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
 import com.example.zerogrid.admin.AdminPanelScreen
 import com.example.zerogrid.auth.LoginScreen
@@ -36,8 +31,6 @@ import com.zerogrid.mesh.app.ui.UserSessionManager
 import com.zerogrid.mesh.app.ui.navigation.AppScreen
 import com.example.zerogrid.ui.ThemeMode
 import com.example.zerogrid.ui.ThemePreferenceManager
-
-    private val THEME_KEY = stringPreferencesKey("theme_mode")
 
 // ── Main App Gateway ───────────────────────────────────────────────────────
 
@@ -190,16 +183,42 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         val themePreferenceManager = ThemePreferenceManager(this)
+        val initialThemeMode = themePreferenceManager.getThemeModeSync()
+
+        // Set window background BEFORE setContent to eliminate window launch flash
+        val isNightMode = (resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+        val initialWindowBgColor = when (initialThemeMode) {
+            ThemeMode.LIGHT -> android.graphics.Color.parseColor("#F8FAFC")
+            ThemeMode.DARK -> android.graphics.Color.parseColor("#0B1312")
+            ThemeMode.SYSTEM -> if (isNightMode) {
+                android.graphics.Color.parseColor("#0B1312")
+            } else {
+                android.graphics.Color.parseColor("#F8FAFC")
+            }
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(initialWindowBgColor))
 
         setContent {
-            // Collect the theme state from DataStore
-            val themeMode by themePreferenceManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            // Collect theme state starting synchronously with saved preference
+            val themeMode by themePreferenceManager.themeMode.collectAsState(initial = initialThemeMode)
 
             // Resolve the actual boolean to pass into your theme
             val isDarkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+
+            SideEffect {
+                val currentBg = if (isDarkTheme) {
+                    android.graphics.Color.parseColor("#0B1312")
+                } else {
+                    android.graphics.Color.parseColor("#F8FAFC")
+                }
+                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(currentBg))
             }
 
             ZeroGridTheme(darkTheme = isDarkTheme) {
