@@ -95,8 +95,27 @@ class ZeroGridFirebaseMessagingService : FirebaseMessagingService() {
         val category = remoteMessage.data["category"] ?: "EMERGENCY"
         val lat = remoteMessage.data["lat"] ?: ""
         val lng = remoteMessage.data["lng"] ?: ""
+        val senderName = remoteMessage.data["senderName"] ?: "Emergency Contact"
+        val message = remoteMessage.data["message"] ?: ""
 
-        showSosNotification(title, body, sosId, category, lat, lng)
+        // 1. Immediately inject into MeshEngine state so Emergency Center shows the alert card and logs
+        val latD = lat.toDoubleOrNull() ?: 0.0
+        val lngD = lng.toDoubleOrNull() ?: 0.0
+        try {
+            com.example.zerogrid.mesh.engine.MeshEngine.getInstance(applicationContext).recordExternalSosAlert(
+                sosId = sosId,
+                senderName = senderName,
+                category = category,
+                message = message.ifBlank { body },
+                lat = latD,
+                lng = lngD
+            )
+            Log.d(TAG, "Successfully recorded FCM SOS alert ($sosId) from $senderName in MeshEngine")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to record external SOS alert in MeshEngine", e)
+        }
+
+        showSosNotification(title, body, sosId, category, lat, lng, senderName)
     }
 
     private fun showSosNotification(
@@ -105,7 +124,8 @@ class ZeroGridFirebaseMessagingService : FirebaseMessagingService() {
         sosId: String,
         category: String,
         lat: String,
-        lng: String
+        lng: String,
+        senderName: String
     ) {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -113,6 +133,8 @@ class ZeroGridFirebaseMessagingService : FirebaseMessagingService() {
             putExtra("EXTRA_CATEGORY", category)
             putExtra("EXTRA_LAT", lat)
             putExtra("EXTRA_LNG", lng)
+            putExtra("EXTRA_SENDER_NAME", senderName)
+            putExtra("EXTRA_NAVIGATE_TO", "TRACK_SOS")
         }
 
         val pendingIntent = PendingIntent.getActivity(

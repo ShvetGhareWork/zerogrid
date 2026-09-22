@@ -39,13 +39,16 @@ class UnifiedSosDispatcher(
         message: String = ""
     ): SosDispatchResult {
         // 1. Local Mesh Broadcast (always executed)
+        val sessionManager = com.zerogrid.mesh.app.ui.UserSessionManager.getInstance(context)
+        val displayName = sessionManager.getUserDisplayName().ifBlank { sessionManager.getUserName() }
         val meshDispatched = try {
             meshEngine.triggerSosBeacon(
                 category = category,
                 message = message,
                 lat = lat,
                 lon = lng,
-                accuracy = accuracy
+                accuracy = accuracy,
+                senderName = displayName.ifBlank { null }
             )
             Log.d(TAG, "Mesh SOS beacon successfully broadcasted.")
             true

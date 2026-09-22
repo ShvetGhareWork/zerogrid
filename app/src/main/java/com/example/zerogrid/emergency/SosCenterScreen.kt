@@ -43,6 +43,33 @@ fun SosCenterScreen(
     val localNodeId = meshEngine.localNodeId
     val colors = ZeroGridTheme.colors
 
+    // Sync active cloud emergencies whenever Emergency Center opens
+    LaunchedEffect(Unit) {
+        try {
+            val response = com.example.zerogrid.network.RetrofitInstance.sosApi.getActiveSos()
+            if (response.isSuccessful) {
+                response.body()?.events?.forEach { ev ->
+                    val coords = ev.location?.coordinates
+                    if (coords != null && coords.size >= 2) {
+                        val lng = coords[0]
+                        val lat = coords[1]
+                        meshEngine.recordExternalSosAlert(
+                            sosId = ev.id,
+                            senderName = ev.triggeredBy?.displayName ?: "Emergency Contact",
+                            category = ev.category,
+                            message = ev.message ?: "",
+                            lat = lat,
+                            lng = lng,
+                            accuracy = ev.accuracyMeters
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SosCenterScreen", "Failed to sync active SOS from cloud", e)
+        }
+    }
+
     Scaffold(
         containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
         topBar = { EmergencyTopBar(onBackClick = { onNavigate(Screen.HOME) }) },
@@ -58,6 +85,33 @@ fun SosCenterScreen(
         ) {
             item(key = "mesh_status_banner") {
                 MeshStatusBanner(peers.size)
+            }
+
+            // If active emergency alerts exist, pin them right to the top!
+            if (alerts.isNotEmpty()) {
+                item(key = "active_alerts_section_top") {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(8.dp).background(colors.accentRed, CircleShape))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ACTIVE EMERGENCY ALERTS (${alerts.size})",
+                                color = colors.accentRed,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        ActiveAlertsSection(
+                            alerts = alerts,
+                            localNodeId = localNodeId,
+                            acknowledgedIds = acknowledgedIds,
+                            onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) },
+                            onTrackSos = onTrackSos
+                        )
+                    }
+                }
             }
 
             // Emergency SOS Action Card
@@ -109,24 +163,26 @@ fun SosCenterScreen(
                 }
             }
 
-            // Active Emergency Alerts Section
-            item(key = "active_alerts_section") {
-                Column {
-                    Text(
-                        text = "ACTIVE EMERGENCY ALERTS",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    ActiveAlertsSection(
-                        alerts = alerts,
-                        localNodeId = localNodeId,
-                        acknowledgedIds = acknowledgedIds,
-                        onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) },
-                        onTrackSos = onTrackSos
-                    )
+            if (alerts.isEmpty()) {
+                // Active Emergency Alerts Section (All clear state)
+                item(key = "active_alerts_section_empty") {
+                    Column {
+                        Text(
+                            text = "ACTIVE EMERGENCY ALERTS",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        ActiveAlertsSection(
+                            alerts = alerts,
+                            localNodeId = localNodeId,
+                            acknowledgedIds = acknowledgedIds,
+                            onAcknowledge = { packetId -> meshEngine.acknowledgeSosAlert(packetId) },
+                            onTrackSos = onTrackSos
+                        )
+                    }
                 }
             }
 
@@ -172,7 +228,9 @@ fun SosCenterScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     RecentActivitySection(
                         alerts = alerts,
-                        acknowledgedIds = acknowledgedIds
+                        acknowledgedIds = acknowledgedIds,
+                        localNodeId = localNodeId,
+                        onTrackSos = onTrackSos
                     )
                 }
             }
@@ -476,13 +534,19 @@ private fun ActiveAlertsSection(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Sender row
+                        val parsedSenderName = alert.getSosSenderName()
+                        val senderDisplayName = when {
+                            isMine -> "You"
+                            !parsedSenderName.isNullOrBlank() -> parsedSenderName
+                            else -> "Node-${alert.senderId.takeLast(4)}"
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(imageVector = Icons.Outlined.DeviceHub, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = if (isMine) "FROM: ${alert.senderId} (This device)" else "FROM: ${alert.senderId}",
+                                text = if (isMine) "FROM: $senderDisplayName (${alert.senderId})" else "FROM: $senderDisplayName",
                                 color = if (isMine) colors.primary else colors.textPrimary,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
@@ -502,55 +566,94 @@ private fun ActiveAlertsSection(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        // Payload
+                        // Clean Parsed Payload Card (Never raw JSON)
+                        val category = alert.getSosCategory()
+                        val message = alert.getSosMessage()
+                        val sosCoords = alert.getSosCoordinates()
+                        val accuracy = alert.getSosAccuracy()
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = colors.surfaceNested),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(
-                                text = alert.payload,
-                                color = if (isAcknowledged) colors.textSecondary else colors.textPrimary,
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                modifier = Modifier.padding(12.dp)
-                            )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "$category EMERGENCY",
+                                        color = colors.accentRed,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    if (sosCoords != null) {
+                                        Text(
+                                            text = "GPS LOCK ✓",
+                                            color = Color(0xFF10B981),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                                if (message.isNotBlank() && message != "Emergency SOS triggered") {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "\"$message\"",
+                                        color = colors.textPrimary,
+                                        fontSize = 13.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                    )
+                                }
+                                if (sosCoords != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Location: ${String.format(java.util.Locale.US, "%.5f", sosCoords.first)}, ${String.format(java.util.Locale.US, "%.5f", sosCoords.second)}${if (accuracy != null) " (±${accuracy.toInt()}m)" else ""}",
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
                         }
 
-                        // TRACK LOCATION button — only shown for incoming alerts with valid GPS
-                        val sosCoords = alert.getSosCoordinates()
-                        if (!isMine && sosCoords != null) {
+                        // TRACK LOCATION button — shown whenever valid GPS coords exist
+                        if (sosCoords != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = {
                                     onTrackSos?.invoke(
                                         sosCoords.first,
                                         sosCoords.second,
-                                        alert.senderId.takeLast(6),
-                                        alert.getSosCategory(),
+                                        senderDisplayName,
+                                        category,
                                         alert.timestamp
                                     )
                                 },
-                                modifier = Modifier.fillMaxWidth().height(36.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1A237E).copy(alpha = 0.3f)
+                                    containerColor = Color(0xFF1E3A8A)
                                 ),
                                 shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFF5C6BC0).copy(alpha = 0.8f)),
+                                border = BorderStroke(1.dp, Color(0xFF3B82F6)),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Explore,
+                                    imageVector = Icons.Outlined.Navigation,
                                     contentDescription = null,
-                                    tint = Color(0xFF9FA8DA),
+                                    tint = Color.White,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "TRACK LOCATION",
-                                    color = Color(0xFF9FA8DA),
+                                    text = if (isMine) "TEST COMPASS POINTER (THIS DEVICE)" else "TRACK LOCATION",
+                                    color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
@@ -671,7 +774,9 @@ private fun NetworkReachSection(
 @Composable
 private fun RecentActivitySection(
     alerts: List<MeshPacket>,
-    acknowledgedIds: Set<String>
+    acknowledgedIds: Set<String>,
+    localNodeId: String = "",
+    onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
 ) {
     val colors = ZeroGridTheme.colors
     Card(
@@ -714,16 +819,33 @@ private fun RecentActivitySection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                alerts.take(5).forEach { alert ->
+                alerts.take(10).forEach { alert ->
                     val isAck = alert.packetId in acknowledgedIds
                     val formattedTime = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
                         .format(java.util.Date(alert.timestamp))
-                    val category = alert.payload.substringAfter("Category: ").substringBefore(" |").ifEmpty { "Emergency" }
+                    val category = alert.getSosCategory()
+                    val message = alert.getSosMessage()
+                    val isMine = alert.senderId == localNodeId
+                    val rawSender = alert.getSosSenderName()
+                    val senderName = when {
+                        isMine -> "You"
+                        !rawSender.isNullOrBlank() -> rawSender
+                        else -> "Node-${alert.senderId.takeLast(4)}"
+                    }
+                    val coords = alert.getSosCoordinates()
+
+                    val title = if (isAck) "SOS Acknowledged: $category ($senderName)" else "$category Alert • $senderName"
+                    val subtitle = if (message.isNotBlank() && message != "Emergency SOS triggered") "\"$message\" • $formattedTime" else formattedTime
+
                     RecentActivityItem(
                         icon = if (isAck) Icons.Outlined.Shield else Icons.Outlined.Emergency,
                         iconTint = if (isAck) colors.primary else colors.accentRed,
-                        title = if (isAck) "SOS acknowledged: $category" else "SOS Broadcast: $category (Node-${alert.senderId.takeLast(4)})",
-                        time = formattedTime
+                        title = title,
+                        subtitle = subtitle,
+                        hasCoords = coords != null,
+                        onTrackClick = if (coords != null) {
+                            { onTrackSos?.invoke(coords.first, coords.second, senderName, category, alert.timestamp) }
+                        } else null
                     )
                 }
             }
@@ -732,15 +854,24 @@ private fun RecentActivitySection(
 }
 
 @Composable
-private fun RecentActivityItem(icon: ImageVector, iconTint: Color, title: String, time: String) {
+private fun RecentActivityItem(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    hasCoords: Boolean = false,
+    onTrackClick: (() -> Unit)? = null
+) {
     val colors = ZeroGridTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onTrackClick != null) Modifier.clickable { onTrackClick() } else Modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(34.dp)
                 .background(colors.surfaceNested, CircleShape),
             contentAlignment = Alignment.Center
         ) {
@@ -748,9 +879,30 @@ private fun RecentActivityItem(icon: ImageVector, iconTint: Color, title: String
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, color = colors.textPrimary, fontSize = 13.sp)
+            Text(text = title, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(2.dp))
-            Text(text = time, color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Text(text = subtitle, color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        }
+        if (hasCoords && onTrackClick != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = onTrackClick,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, Color(0xFF3B82F6)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF60A5FA)
+                ),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Navigation,
+                    contentDescription = null,
+                    modifier = Modifier.size(11.dp)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("TRACK", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            }
         }
     }
 }

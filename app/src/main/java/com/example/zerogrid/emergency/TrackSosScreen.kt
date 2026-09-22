@@ -2,6 +2,7 @@ package com.example.zerogrid.emergency
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -74,18 +76,37 @@ fun TrackSosScreen(
     var responderLat by remember { mutableStateOf<Double?>(null) }
     var responderLng by remember { mutableStateOf<Double?>(null) }
     var distanceMeters by remember { mutableStateOf<Float?>(null) }
-    var targetBearing by remember { mutableStateOf(0f) }   // bearing to target (0–360°)
-    var deviceAzimuth by remember { mutableStateOf(0f) }   // phone heading (0=North)
+    var targetBearing by remember { mutableStateOf(0f) }   // normalized bearing to target (0–360° True North)
+    var deviceAzimuth by remember { mutableStateOf(0f) }   // smoothed phone heading (0–360° True North)
+    var magneticDeclination by remember { mutableStateOf(0f) }
     var hasLocationPermission by remember { mutableStateOf(true) }
 
-    // Animated needle angle
+    // Relative target bearing from phone's current heading (0° = straight ahead)
+    val relativeAngle = (targetBearing - deviceAzimuth + 360f) % 360f
+
+    // Continuous angle accumulation to prevent 360° spinning across North boundary
+    var continuousNeedleAngle by remember { mutableStateOf(0f) }
+    LaunchedEffect(relativeAngle) {
+        var diff = (relativeAngle - (continuousNeedleAngle % 360f + 360f) % 360f) % 360f
+        if (diff < -180f) diff += 360f
+        if (diff > 180f) diff -= 360f
+        continuousNeedleAngle += diff
+    }
+
+    // Animated needle angle with smooth spring physics
     val needleAngle by animateFloatAsState(
-        targetValue = ((targetBearing - deviceAzimuth + 360f) % 360f),
-        animationSpec = tween(durationMillis = 200, easing = LinearEasing),
+        targetValue = continuousNeedleAngle,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioNoBouncy
+        ),
         label = "needleAngle"
     )
 
-    val isOnTarget = abs(needleAngle - 180f) < 10f || needleAngle < 10f || needleAngle > 350f
+    // ON TARGET indicator: True when facing victim within ±15° straight ahead
+    val normalizedRelative = ((needleAngle % 360f) + 360f) % 360f
+    val deviationFromTarget = if (normalizedRelative > 180f) 360f - normalizedRelative else normalizedRelative
+    val isOnTarget = deviationFromTarget <= 15f && distanceMeters != null
 
     // Radar pulse animation
     val infiniteTransition = rememberInfiniteTransition(label = "radar")
@@ -108,7 +129,17 @@ fun TrackSosScreen(
                 val results = FloatArray(2)
                 Location.distanceBetween(loc.latitude, loc.longitude, targetLat, targetLng, results)
                 distanceMeters = results[0]
-                targetBearing = results[1]
+                targetBearing = (results[1] + 360f) % 360f
+
+                try {
+                    val geo = GeomagneticField(
+                        loc.latitude.toFloat(),
+                        loc.longitude.toFloat(),
+                        loc.altitude.toFloat(),
+                        System.currentTimeMillis()
+                    )
+                    magneticDeclination = geo.declination
+                } catch (_: Exception) {}
             }
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(p: String?, s: Int, e: Bundle?) {}
@@ -127,15 +158,25 @@ fun TrackSosScreen(
                     val results = FloatArray(2)
                     Location.distanceBetween(loc.latitude, loc.longitude, targetLat, targetLng, results)
                     distanceMeters = results[0]
-                    targetBearing = results[1]
+                    targetBearing = (results[1] + 360f) % 360f
+
+                    try {
+                        val geo = GeomagneticField(
+                            loc.latitude.toFloat(),
+                            loc.longitude.toFloat(),
+                            loc.altitude.toFloat(),
+                            System.currentTimeMillis()
+                        )
+                        magneticDeclination = geo.declination
+                    } catch (_: Exception) {}
                 }
         } catch (_: SecurityException) { hasLocationPermission = false }
 
         onDispose { lm?.removeUpdates(listener) }
     }
 
-    // ── Sensor Listener (Compass / Azimuth) ────────────────────────────────────
-    DisposableEffect(Unit) {
+    // ── Sensor Listener (Compass / Azimuth with Tilt Compensation & Low-Pass Filter) ──
+    DisposableEffect(magneticDeclination) {
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val rotationSensor = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         val accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -144,25 +185,60 @@ fun TrackSosScreen(
         val gravity = FloatArray(3)
         val geomagnetic = FloatArray(3)
 
+        fun updateAzimuthWithFilter(rawMagAzimuth: Float) {
+            val trueHeading = (rawMagAzimuth + magneticDeclination + 360f) % 360f
+            // Low-pass exponential moving average filter
+            var diff = (trueHeading - deviceAzimuth) % 360f
+            if (diff < -180f) diff += 360f
+            if (diff > 180f) diff -= 360f
+            deviceAzimuth = (deviceAzimuth + 0.22f * diff + 360f) % 360f
+        }
+
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 when (event.sensor.type) {
                     Sensor.TYPE_ROTATION_VECTOR -> {
                         val rotMatrix = FloatArray(9)
                         SensorManager.getRotationMatrixFromVector(rotMatrix, event.values)
-                        val orientation = FloatArray(3)
-                        SensorManager.getOrientation(rotMatrix, orientation)
-                        // orientation[0] = azimuth in radians, convert to degrees
-                        deviceAzimuth = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
+
+                        // Check pitch/tilt: if phone is held upright in hand, remap coordinate axes
+                        val flatOrientation = FloatArray(3)
+                        SensorManager.getOrientation(rotMatrix, flatOrientation)
+                        val pitchDeg = Math.toDegrees(flatOrientation[1].toDouble())
+
+                        val rawAzimuth = if (abs(pitchDeg) > 40.0) {
+                            val adjustedR = FloatArray(9)
+                            SensorManager.remapCoordinateSystem(rotMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z, adjustedR)
+                            val uprightOrientation = FloatArray(3)
+                            SensorManager.getOrientation(adjustedR, uprightOrientation)
+                            (Math.toDegrees(uprightOrientation[0].toDouble()).toFloat() + 360f) % 360f
+                        } else {
+                            (Math.toDegrees(flatOrientation[0].toDouble()).toFloat() + 360f) % 360f
+                        }
+
+                        updateAzimuthWithFilter(rawAzimuth)
                     }
                     Sensor.TYPE_ACCELEROMETER -> gravity.apply { event.values.copyInto(this) }
                     Sensor.TYPE_MAGNETIC_FIELD -> {
                         geomagnetic.apply { event.values.copyInto(this) }
-                        val R = FloatArray(9); val I = FloatArray(9)
+                        val R = FloatArray(9)
+                        val I = FloatArray(9)
                         if (SensorManager.getRotationMatrix(R, I, gravity, geomagnetic)) {
-                            val orientation = FloatArray(3)
-                            SensorManager.getOrientation(R, orientation)
-                            deviceAzimuth = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
+                            val flatOrientation = FloatArray(3)
+                            SensorManager.getOrientation(R, flatOrientation)
+                            val pitchDeg = Math.toDegrees(flatOrientation[1].toDouble())
+
+                            val rawAzimuth = if (abs(pitchDeg) > 40.0) {
+                                val adjustedR = FloatArray(9)
+                                SensorManager.remapCoordinateSystem(R, SensorManager.AXIS_X, SensorManager.AXIS_Z, adjustedR)
+                                val uprightOrientation = FloatArray(3)
+                                SensorManager.getOrientation(adjustedR, uprightOrientation)
+                                (Math.toDegrees(uprightOrientation[0].toDouble()).toFloat() + 360f) % 360f
+                            } else {
+                                (Math.toDegrees(flatOrientation[0].toDouble()).toFloat() + 360f) % 360f
+                            }
+
+                            updateAzimuthWithFilter(rawAzimuth)
                         }
                     }
                 }
@@ -171,10 +247,10 @@ fun TrackSosScreen(
         }
 
         if (rotationSensor != null) {
-            sm.registerListener(listener, rotationSensor, SensorManager.SENSOR_DELAY_UI)
+            sm.registerListener(listener, rotationSensor, SensorManager.SENSOR_DELAY_GAME)
         } else {
-            accelSensor?.let { sm.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI) }
-            magSensor?.let { sm.registerListener(listener, it, SensorManager.SENSOR_DELAY_UI) }
+            accelSensor?.let { sm.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
+            magSensor?.let { sm.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
         }
 
         onDispose { sm.unregisterListener(listener) }
@@ -318,7 +394,7 @@ fun TrackSosScreen(
                 MetricCard(
                     label = "ETA (WALK)",
                     value = formatWalkTime(distanceMeters),
-                    icon = Icons.Outlined.DirectionsWalk,
+                    icon = Icons.AutoMirrored.Outlined.DirectionsWalk,
                     highlight = false
                 )
             }

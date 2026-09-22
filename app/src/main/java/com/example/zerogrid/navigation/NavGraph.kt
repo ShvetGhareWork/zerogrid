@@ -41,10 +41,19 @@ private val SosRed = Color(0xFFFF3B30)
 private val SosAmber = Color(0xFFFF9500)
 private val SosCyan = Color(0xFF00E5FF)
 
+data class SosTrackingTarget(
+    val lat: Double,
+    val lng: Double,
+    val name: String = "Emergency Contact",
+    val category: String = "SOS",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ZeroGridApp(
     initialScreen: Screen = Screen.HOME,
+    initialTrackTarget: SosTrackingTarget? = null,
     onLogout: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -69,19 +78,21 @@ fun ZeroGridApp(
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { NavTab.entries.size })
     val subScreenStack = remember {
         mutableStateListOf<Screen>().apply {
-            if (initialScreen !in setOf(Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS)) {
+            if (initialTrackTarget != null) {
+                add(Screen.TRACK_SOS)
+            } else if (initialScreen !in setOf(Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS)) {
                 add(initialScreen)
             }
         }
     }
     val currentSubScreen = subScreenStack.lastOrNull()
     var selectedPeerId by remember { mutableStateOf("") }
-    // Track SOS target coordinates passed from SosCenterScreen alert cards
-    var trackSosLat by remember { mutableStateOf(0.0) }
-    var trackSosLng by remember { mutableStateOf(0.0) }
-    var trackSosName by remember { mutableStateOf("Unknown") }
-    var trackSosCategory by remember { mutableStateOf("SOS") }
-    var trackSosTimestamp by remember { mutableStateOf(0L) }
+    // Track SOS target coordinates passed from SosCenterScreen alert cards or notification
+    var trackSosLat by remember { mutableStateOf(initialTrackTarget?.lat ?: 0.0) }
+    var trackSosLng by remember { mutableStateOf(initialTrackTarget?.lng ?: 0.0) }
+    var trackSosName by remember { mutableStateOf(initialTrackTarget?.name ?: "Unknown") }
+    var trackSosCategory by remember { mutableStateOf(initialTrackTarget?.category ?: "SOS") }
+    var trackSosTimestamp by remember { mutableStateOf(initialTrackTarget?.timestamp ?: 0L) }
 
     val currentTabScreen = when (pagerState.currentPage) {
         0 -> Screen.HOME

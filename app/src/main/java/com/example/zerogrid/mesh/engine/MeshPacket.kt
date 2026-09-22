@@ -75,6 +75,16 @@ data class MeshPacket(
         }
     }
 
+    /** Parses the SOS sender display name if present in structured payload. */
+    fun getSosSenderName(): String? {
+        return try {
+            val name = JSONObject(payload).optString("senderName", "")
+            if (name.isNotBlank()) name else null
+        } catch (_: Exception) {
+            Regex("Sender:\\s*([^|]+)").find(payload)?.groupValues?.get(1)?.trim()
+        }
+    }
+
     companion object {
         const val BROADCAST_ADDRESS = "*"
         const val DEFAULT_TTL = 5
@@ -88,7 +98,8 @@ data class MeshPacket(
             message: String,
             lat: Double,
             lng: Double,
-            accuracy: Float? = null
+            accuracy: Float? = null,
+            senderName: String? = null
         ): String {
             val json = JSONObject()
             json.put("category", category)
@@ -96,6 +107,7 @@ data class MeshPacket(
             json.put("lat", lat)
             json.put("lng", lng)
             if (accuracy != null) json.put("accuracy", accuracy.toDouble())
+            if (!senderName.isNullOrBlank()) json.put("senderName", senderName)
             json.put("ts", System.currentTimeMillis())
             return json.toString()
         }

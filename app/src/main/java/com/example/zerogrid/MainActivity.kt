@@ -2,6 +2,7 @@ package com.example.zerogrid
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -144,9 +145,60 @@ fun MainAppGateway() {
         // ── Citizen: existing mesh app ─────────────────────────────────
         AppScreen.UserDashboard -> {
             val activity = context as? ComponentActivity
-            val hasSosIntent = activity?.intent?.hasExtra("EXTRA_SOS_ID") == true
-            val initialScreen = if (hasSosIntent) com.example.zerogrid.navigation.Screen.SOS_CENTER else com.example.zerogrid.navigation.Screen.HOME
-            ZeroGridApp(initialScreen = initialScreen, onLogout = { logout() })
+            val intent = activity?.intent
+            val sosId = intent?.getStringExtra("sosId")
+                ?: intent?.getStringExtra("EXTRA_SOS_ID")
+            val latStr = intent?.getStringExtra("lat")
+                ?: intent?.getStringExtra("EXTRA_LAT")
+            val lngStr = intent?.getStringExtra("lng")
+                ?: intent?.getStringExtra("EXTRA_LNG")
+            val senderName = intent?.getStringExtra("senderName")
+                ?: intent?.getStringExtra("EXTRA_SENDER_NAME")
+                ?: "Emergency Contact"
+            val category = intent?.getStringExtra("category")
+                ?: intent?.getStringExtra("EXTRA_CATEGORY")
+                ?: "SOS"
+            val message = intent?.getStringExtra("message")
+                ?: intent?.getStringExtra("EXTRA_MESSAGE")
+                ?: ""
+
+            val lat = latStr?.toDoubleOrNull() ?: 0.0
+            val lng = lngStr?.toDoubleOrNull() ?: 0.0
+            val hasSosIntent = !sosId.isNullOrBlank() || intent?.hasExtra("EXTRA_SOS_ID") == true || intent?.hasExtra("sosId") == true
+
+            // Automatically inject the SOS into MeshEngine so it shows up in Emergency Center and alert logs
+            if (hasSosIntent && (lat != 0.0 || lng != 0.0)) {
+                try {
+                    com.example.zerogrid.mesh.engine.MeshEngine.getInstance(context).recordExternalSosAlert(
+                        sosId = sosId ?: java.util.UUID.randomUUID().toString(),
+                        senderName = senderName,
+                        category = category,
+                        message = message,
+                        lat = lat,
+                        lng = lng
+                    )
+                } catch (_: Exception) {}
+            }
+
+            val initialTrackTarget = if ((lat != 0.0 || lng != 0.0) && hasSosIntent) {
+                com.example.zerogrid.navigation.SosTrackingTarget(
+                    lat = lat,
+                    lng = lng,
+                    name = senderName,
+                    category = category
+                )
+            } else null
+
+            val initialScreen = when {
+                initialTrackTarget != null -> com.example.zerogrid.navigation.Screen.TRACK_SOS
+                hasSosIntent -> com.example.zerogrid.navigation.Screen.SOS_CENTER
+                else -> com.example.zerogrid.navigation.Screen.HOME
+            }
+            ZeroGridApp(
+                initialScreen = initialScreen,
+                initialTrackTarget = initialTrackTarget,
+                onLogout = { logout() }
+            )
         }
 
         // ── Admin: dedicated admin panel ───────────────────────────────
@@ -163,6 +215,11 @@ fun MainAppGateway() {
 // ── MainActivity ───────────────────────────────────────────────────────────
 
 class MainActivity : ComponentActivity() {
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()

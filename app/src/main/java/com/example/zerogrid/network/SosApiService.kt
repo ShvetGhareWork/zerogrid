@@ -55,6 +55,10 @@ data class SosDetailResponse(
     @SerializedName("sos") val sos: SosEventDto
 )
 
+data class SosActiveResponse(
+    @SerializedName("events") val events: List<SosEventDto> = emptyList()
+)
+
 // ── Retrofit Service ────────────────────────────────────────────────────────
 
 interface SosApiService {
@@ -63,6 +67,9 @@ interface SosApiService {
     suspend fun dispatchSos(
         @Body body: SosDispatchRequest
     ): Response<SosDispatchResponse>
+
+    @GET("${ApiConstants.SOS}/active")
+    suspend fun getActiveSos(): Response<SosActiveResponse>
 
     @GET("${ApiConstants.SOS}/{id}")
     suspend fun getSosById(

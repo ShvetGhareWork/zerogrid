@@ -433,15 +433,18 @@ class MeshEngine private constructor(private val context: Context) {
         lat: Double? = null,
         lon: Double? = null,
         accuracy: Float? = null,
-        preferredTransport: String? = null
+        preferredTransport: String? = null,
+        senderName: String? = null
     ): MeshPacket {
+        val effectiveSenderName = senderName ?: _displayName.value.ifBlank { null }
         // Use structured JSON payload so receiving devices can extract coordinates precisely
         val payload = MeshPacket.buildSosPayload(
             category = category,
             message = message,
             lat = lat ?: 0.0,
             lng = lon ?: 0.0,
-            accuracy = accuracy
+            accuracy = accuracy,
+            senderName = effectiveSenderName
         )
         val packet = MeshPacket(
             senderId = localNodeId,
@@ -459,6 +462,50 @@ class MeshEngine private constructor(private val context: Context) {
             _sosAlerts.value = current
         }
         return packet
+    }
+
+    /**
+     * Injects a cloud/FCM SOS alert received for an emergency contact or remote event into local state.
+     * Allows Emergency Center to log and track cloud-dispatched emergencies alongside mesh alerts.
+     */
+    fun recordExternalSosAlert(
+        sosId: String,
+        senderName: String,
+        category: String,
+        message: String,
+        lat: Double,
+        lng: Double,
+        accuracy: Float? = null,
+        timestamp: Long = System.currentTimeMillis()
+    ) {
+        val payload = MeshPacket.buildSosPayload(
+            category = category,
+            message = message,
+            lat = lat,
+            lng = lng,
+            accuracy = accuracy,
+            senderName = senderName
+        )
+        val packet = MeshPacket(
+            packetId = sosId.ifBlank { UUID.randomUUID().toString() },
+            senderId = senderName.ifBlank { "Cloud Emergency" },
+            recipientId = localNodeId,
+            ttl = 1,
+            hopCount = 0,
+            type = PacketType.SOS_BEACON,
+            payload = payload,
+            timestamp = timestamp
+        )
+        synchronized(stateLock) {
+            val current = _sosAlerts.value.toMutableList()
+            val existingIndex = current.indexOfFirst { it.packetId == packet.packetId }
+            if (existingIndex != -1) {
+                current[existingIndex] = packet
+            } else {
+                current.add(0, packet)
+            }
+            _sosAlerts.value = current
+        }
     }
 
     private fun handleIncomingPacket(packet: MeshPacket) {
