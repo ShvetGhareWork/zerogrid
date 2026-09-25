@@ -154,7 +154,9 @@ class MeshPeerResolver private constructor() {
         )
 
         deviceEndpoints[interfaceType] = endpoint
-        Log.d(TAG, "Updated endpoint for $uniqueDeviceId via ${interfaceType.displayName} ($address, RSSI=$rssi dBm)")
+        scope.launch {
+            Log.d(TAG, "Updated endpoint for $uniqueDeviceId via ${interfaceType.displayName} ($address, RSSI=$rssi dBm)")
+        }
     }
 
     /**

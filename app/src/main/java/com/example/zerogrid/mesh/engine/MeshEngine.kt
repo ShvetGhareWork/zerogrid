@@ -221,16 +221,27 @@ class MeshEngine private constructor(private val context: Context) {
             }
         }
 
-        // Periodic 10-second peer announcement broadcast across active mesh transports
+        // Periodic peer announcement broadcast with adaptive backoff to prevent flooding
         scope.launch {
+            var lastPeerCount = -1
+            var interval = 10_000L
             while (true) {
-                delay(10_000L)
+                delay(interval)
                 try {
                     if (_isMeshActive.value) {
                         broadcastPeerAnnounce()
+                        val currentPeerCount = _connectedPeers.value.size
+                        if (currentPeerCount == lastPeerCount && currentPeerCount > 0) {
+                            // Stable topology: incrementally back off up to 30 seconds to prevent packet storms
+                            interval = (interval + 5_000L).coerceAtMost(30_000L)
+                        } else {
+                            // Topology changed or empty: announce at 10-second baseline
+                            interval = 10_000L
+                            lastPeerCount = currentPeerCount
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Exception in 10s peer announce loop", e)
+                    Log.e(TAG, "Exception in peer announce loop", e)
                 }
             }
         }
