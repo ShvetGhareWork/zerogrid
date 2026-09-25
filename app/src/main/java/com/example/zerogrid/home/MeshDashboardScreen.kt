@@ -46,7 +46,11 @@ fun MeshDashboardScreen(
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
     val colors = ZeroGridTheme.colors
 
-    val batteryPercent = remember { getBatteryPercentage(context) }
+    val batteryPercent by produceState(initialValue = 100, context) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            getBatteryPercentage(context)
+        }
+    }
 
     Scaffold(
         containerColor = Color.Transparent,

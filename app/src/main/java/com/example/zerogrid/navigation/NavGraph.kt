@@ -100,6 +100,22 @@ fun ZeroGridApp(
         else -> Screen.HOME
     }
 
+    // Prefetch & preload data for adjacent pages (currentPage - 1 and currentPage + 1) off the main thread
+    LaunchedEffect(pagerState.currentPage) {
+        val currentPage = pagerState.currentPage
+        val adjacentPages = listOf(currentPage - 1, currentPage + 1).filter { it in 0 until 4 }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            adjacentPages.forEach { page ->
+                when (page) {
+                    0 -> meshEngine.connectedPeers.value
+                    1 -> meshEngine.conversations.value
+                    2 -> meshEngine.sosAlerts.value
+                    3 -> com.zerogrid.mesh.app.ui.UserSessionManager.getInstance(context).getUserName()
+                }
+            }
+        }
+    }
+
     // Only these 4 screens are true pager tab roots — navigating to them scrolls the pager.
     // ALL other screens (sub-screens like EMERGENCY_CONTACTS, CHANNELS, FAMILY_LINKS, etc.)
     // must be pushed as currentSubScreen overlays, never as pager tab switches.
