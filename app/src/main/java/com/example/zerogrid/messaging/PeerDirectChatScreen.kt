@@ -96,6 +96,10 @@ fun PeerDirectChatScreen(
                     }
                     meshEngine.setMeshChannelMode(newMode)
                 },
+                onClearChat = {
+                    meshEngine.deleteConversation(peerId)
+                    onNavigate(Screen.MESSAGES)
+                },
                 onBackClick = { onNavigate(Screen.MESSAGES) }
             )
         },
@@ -234,6 +238,7 @@ private fun PeerChatTopBar(
     hopInfo: String,
     activeMode: com.example.zerogrid.mesh.engine.MeshChannelMode,
     onToggleMode: () -> Unit,
+    onClearChat: () -> Unit,
     onBackClick: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
@@ -312,6 +317,20 @@ private fun PeerChatTopBar(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(
+                onClick = onClearChat,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.DeleteOutline,
+                    contentDescription = "Clear Chat",
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

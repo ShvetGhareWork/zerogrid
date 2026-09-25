@@ -16,6 +16,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -27,7 +28,6 @@ import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.mesh.engine.MeshNode
 import com.example.zerogrid.navigation.Screen
 import com.example.zerogrid.navigation.ZeroGridBottomBar
-import com.example.zerogrid.ui.components.ZeroGridTopBar
 import com.example.zerogrid.ui.theme.BadgeGreen
 import com.example.zerogrid.ui.theme.ZeroGridTheme
 import java.text.SimpleDateFormat
@@ -72,9 +72,9 @@ fun MessagesScreen(
         }.distinctBy { it.nodeId }
     }
 
-    // Peers that have messages or are currently connected
+    // Ephemeral session: Peers that have active messages in this session or are currently connected
     val allChatPeerIds = remember(conversations, filteredPeers) {
-        val fromConversations = conversations.keys.filter { peerId ->
+        val fromConversations = conversations.filter { it.value.isNotEmpty() }.keys.filter { peerId ->
             !peerId.equals(localNodeId, ignoreCase = true) &&
             !peerId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true)
         }
@@ -84,18 +84,23 @@ fun MessagesScreen(
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Direct Chats, 1: Channels
     var searchQuery by remember { mutableStateOf("") }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     // Fast O(1) peer lookup map to eliminate linear searches during list building
     val peerMap = remember(filteredPeers) { filteredPeers.associateBy { it.nodeId } }
 
-    // Precomputed immutable UI model list: eliminates heavy calculations, unread counts, and lookups during item composition
+    // Precomputed immutable UI model list, dynamically sorted by most recent chat first
     val displayChats = remember(allChatPeerIds, searchQuery, conversations, peerMap) {
         allChatPeerIds.mapNotNull { peerId ->
             val peer = peerMap[peerId]
-            val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
             val messages = conversations[peerId] ?: emptyList()
+            if (peer == null && messages.isEmpty()) {
+                return@mapNotNull null
+            }
+            val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
             val lastMsg = messages.lastOrNull()
-            val lastMsgText = lastMsg?.text ?: "Ready to connect over mesh"
+            val lastMsgText = lastMsg?.text ?: if (peer != null) "Connected • Ready to chat" else "Offline"
+            val lastTimestamp = lastMsg?.timestamp ?: (peer?.lastSeenTimestamp ?: System.currentTimeMillis())
 
             if (searchQuery.isNotBlank() &&
                 !alias.contains(searchQuery, ignoreCase = true) &&
@@ -111,22 +116,14 @@ fun MessagesScreen(
                 isOnline = peer != null,
                 hopDistance = peer?.hopDistance ?: -1,
                 lastMessage = lastMsgText,
-                timestamp = lastMsg?.timestamp ?: System.currentTimeMillis(),
+                timestamp = lastTimestamp,
                 unreadCount = unreadCount
             )
-        }
+        }.sortedByDescending { it.timestamp }
     }
 
     Scaffold(
         containerColor = Color.Transparent, // Overdraw elimination: let root Scaffold own background
-        topBar = {
-            ZeroGridTopBar(
-                peerCount = filteredPeers.size,
-                isMeshActive = isMeshActive,
-                onProfileClick = { onNavigate(Screen.PROFILE) }
-            )
-        },
-//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.MESSAGES, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -150,7 +147,7 @@ fun MessagesScreen(
                             .fillMaxWidth()
                     ) {
                         Column {
-                            // Screen Header: Title + Subtitle + Mesh Active Pill
+                            // Screen Header: Title + Subtitle + Mesh Active Pill + Clear Action
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -165,35 +162,90 @@ fun MessagesScreen(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Offline & Mesh Chat",
+                                        text = "Ephemeral Mesh Chat",
                                         fontSize = 13.sp,
                                         color = colors.textSecondary
                                     )
                                 }
 
-                                Surface(
-                                    color = if (isMeshActive) BadgeGreen.copy(alpha = 0.12f) else colors.surfaceNested,
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = if (isMeshActive) BadgeGreen.copy(alpha = 0.12f) else colors.surfaceNested,
+                                        shape = RoundedCornerShape(16.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .background(if (isMeshActive) BadgeGreen else colors.textSecondary, CircleShape)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (isMeshActive) "${activeChannelMode.label} Active" else "Offline",
-                                            color = if (isMeshActive) BadgeGreen else colors.textSecondary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(if (isMeshActive) BadgeGreen else colors.textSecondary, CircleShape)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isMeshActive) "${activeChannelMode.label} Active" else "Offline",
+                                                color = if (isMeshActive) BadgeGreen else colors.textSecondary,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    IconButton(
+                                        onClick = { showClearConfirmDialog = true },
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .background(colors.surfaceNested, CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DeleteSweep,
+                                            contentDescription = "Clear Session Chats",
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
                                 }
+                            }
+
+                            if (showClearConfirmDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showClearConfirmDialog = false },
+                                    title = {
+                                        Text(
+                                            text = "Clear All Session Chats?",
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textPrimary
+                                        )
+                                    },
+                                    text = {
+                                        Text(
+                                            text = "This will immediately clear all messages and chat history from this session. They will not be saved.",
+                                            color = colors.textSecondary,
+                                            fontSize = 14.sp
+                                        )
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                meshEngine.clearAllConversations()
+                                                showClearConfirmDialog = false
+                                            }
+                                        ) {
+                                            Text("Clear All", color = colors.accentRed, fontWeight = FontWeight.Bold)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showClearConfirmDialog = false }) {
+                                            Text("Cancel", color = colors.textSecondary)
+                                        }
+                                    },
+                                    containerColor = colors.cardBackground,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -208,7 +260,7 @@ fun MessagesScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -255,7 +307,7 @@ fun MessagesScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             // Segmented Tab Selector: Direct Chats vs Channels
                             Row(
@@ -267,7 +319,7 @@ fun MessagesScreen(
                                 SegmentedTabItem(
                                     modifier = Modifier.weight(1f),
                                     title = "Direct Chats",
-                                    badge = allChatPeerIds.size.toString(),
+                                    badge = displayChats.size.toString(),
                                     selected = selectedTab == 0,
                                     onClick = { selectedTab = 0 }
                                 )
@@ -280,16 +332,7 @@ fun MessagesScreen(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Emergency Broadcast Banner Card
-                            EmergencyBroadcastBanner(
-                                nearbyCount = filteredPeers.size + 1,
-                                sosAlertsCount = sosAlerts.size,
-                                onJoinChannel = { onNavigate(Screen.CHANNELS) }
-                            )
-
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
 
                             // Section Title
                             Row(
@@ -351,7 +394,7 @@ fun MessagesScreen(
                                 modifier = Modifier
                                     .widthIn(max = 840.dp)
                                     .fillMaxWidth()
-                                    .padding(vertical = 5.dp)
+                                    .padding(vertical = 4.dp)
                             ) {
                                 RecentChatCard(
                                     alias = chat.alias,
@@ -360,7 +403,8 @@ fun MessagesScreen(
                                     lastMessage = chat.lastMessage,
                                     timestamp = chat.timestamp,
                                     unreadCount = chat.unreadCount,
-                                    onClick = { onOpenPeerChat?.invoke(chat.peerId) }
+                                    onClick = { onOpenPeerChat?.invoke(chat.peerId) },
+                                    onDelete = { meshEngine.deleteConversation(chat.peerId) }
                                 )
                             }
                         }
@@ -485,137 +529,6 @@ private fun SegmentedTabItem(
 }
 
 @Composable
-private fun EmergencyBroadcastBanner(
-    nearbyCount: Int,
-    sosAlertsCount: Int,
-    onJoinChannel: () -> Unit
-) {
-    val colors = ZeroGridTheme.colors
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (sosAlertsCount > 0) colors.accentRed.copy(alpha = 0.08f) else colors.primary.copy(alpha = 0.08f)
-        ),
-        border = CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(
-                if (sosAlertsCount > 0) colors.accentRed.copy(alpha = 0.35f) else colors.primary.copy(alpha = 0.25f)
-            )
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                if (sosAlertsCount > 0) colors.accentRed.copy(alpha = 0.15f) else colors.primary.copy(alpha = 0.15f),
-                                RoundedCornerShape(10.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Campaign,
-                            contentDescription = null,
-                            tint = if (sosAlertsCount > 0) colors.accentRed else colors.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "#emergency-broadcast",
-                        color = if (sosAlertsCount > 0) colors.accentRed else colors.primary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Surface(
-                    color = BadgeGreen.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.CellTower,
-                            contentDescription = null,
-                            tint = BadgeGreen,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "$nearbyCount Nearby",
-                            color = BadgeGreen,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = if (sosAlertsCount > 0) {
-                    "ACTIVE SOS BEACON: $sosAlertsCount emergency alert broadcast in progress over mesh."
-                } else {
-                    "ZeroGrid off-grid community broadcast feed for emergency alerts and coordination."
-                },
-                color = colors.textPrimary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (sosAlertsCount > 0) "Emergency Active" else "Channel Standby",
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                TextButton(
-                    onClick = onJoinChannel,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Join Channel",
-                            color = if (sosAlertsCount > 0) colors.accentRed else colors.primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Outlined.ArrowForward,
-                            contentDescription = null,
-                            tint = if (sosAlertsCount > 0) colors.accentRed else colors.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun RecentChatCard(
     alias: String,
     isOnline: Boolean,
@@ -623,7 +536,8 @@ private fun RecentChatCard(
     lastMessage: String,
     timestamp: Long,
     unreadCount: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
     val initials = if (alias.length >= 2) alias.take(2).uppercase() else "ZG"
@@ -631,7 +545,7 @@ private fun RecentChatCard(
     val timeString = remember(timestamp) {
         val diff = System.currentTimeMillis() - timestamp
         when {
-            diff < 60_000 -> "now"
+            diff < 60_000 -> "Just now"
             diff < 3600_000 -> "${diff / 60_000}m ago"
             diff < 86400_000 -> "${diff / 3600_000}h ago"
             else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(timestamp))
@@ -641,29 +555,38 @@ private fun RecentChatCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider.copy(alpha = 0.7f)))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar with online/offline badge
+            // Modern Avatar with online/offline badge
             Box(contentAlignment = Alignment.BottomEnd) {
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .background(colors.primary.copy(alpha = 0.12f), CircleShape),
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    colors.primary.copy(alpha = 0.20f),
+                                    colors.primary.copy(alpha = 0.08f)
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                        .border(1.dp, colors.primary.copy(alpha = 0.25f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = initials,
                         color = colors.primary,
-                        fontSize = 16.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
@@ -671,12 +594,12 @@ private fun RecentChatCard(
                 Box(
                     modifier = Modifier
                         .size(12.dp)
-                        .background(if (isOnline) BadgeGreen else colors.textSecondary, CircleShape)
+                        .background(if (isOnline) BadgeGreen else colors.textSecondary.copy(alpha = 0.5f), CircleShape)
                         .border(2.dp, colors.cardBackground, CircleShape)
                 )
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 // Name + Time
@@ -693,7 +616,7 @@ private fun RecentChatCard(
                             text = alias,
                             color = colors.textPrimary,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -709,33 +632,35 @@ private fun RecentChatCard(
                     }
                     Text(
                         text = timeString,
-                        color = colors.textSecondary,
+                        color = if (unreadCount > 0) colors.primary else colors.textSecondary,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (unreadCount > 0) FontWeight.Bold else FontWeight.Normal
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 // Last Message Preview
                 Text(
                     text = lastMessage,
-                    color = colors.textSecondary,
+                    color = if (unreadCount > 0) colors.textPrimary else colors.textSecondary,
                     fontSize = 13.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (unreadCount > 0) FontWeight.Medium else FontWeight.Normal
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Hop badge & unread indicator
+                // Badges Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val (hopLabel, hopColor) = when {
-                        !isOnline -> "Offline Cache" to colors.textSecondary
+                        !isOnline -> "Offline" to colors.textSecondary
                         hopDistance <= 1 -> "Direct" to BadgeGreen
                         hopDistance == 2 -> "1 Hop" to colors.primary
                         else -> "$hopDistance Hops" to colors.textSecondary
@@ -755,7 +680,7 @@ private fun RecentChatCard(
                                 tint = hopColor,
                                 modifier = Modifier.size(10.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = hopLabel,
                                 color = hopColor,
@@ -766,18 +691,35 @@ private fun RecentChatCard(
                         }
                     }
 
-                    if (unreadCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .background(colors.primary, CircleShape),
-                            contentAlignment = Alignment.Center
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (unreadCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .defaultMinSize(minWidth = 18.dp)
+                                    .height(18.dp)
+                                    .background(colors.primary, RoundedCornerShape(9.dp))
+                                    .padding(horizontal = 5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                    color = if (colors.isDark) Color.Black else Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(24.dp)
                         ) {
-                            Text(
-                                text = unreadCount.toString(),
-                                color = if (colors.isDark) Color.Black else Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Remove Chat",
+                                tint = colors.textSecondary.copy(alpha = 0.5f),
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
@@ -905,7 +847,7 @@ private fun EmptyMessagesCard(
                 text = if (hasConnectedPeers) {
                     "Peers are currently within mesh range. Select a peer to start encrypted off-grid communication."
                 } else {
-                    "No peers detected within radio range yet. Radio drivers are scanning for nearby nodes."
+                    "ZeroGrid operates with ephemeral chat: conversations exist in-memory during this session and vanish once the app closes."
                 },
                 color = colors.textSecondary,
                 fontSize = 13.sp,

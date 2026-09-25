@@ -138,6 +138,20 @@ class MessageStore private constructor(context: Context) {
         }
     }
 
+    /** Wipes all stored conversations and cached messages from local storage. */
+    fun clearAllMessages() {
+        try {
+            val editor = prefs.edit()
+            prefs.all.keys
+                .filter { it.startsWith(CONV_KEY_PREFIX) }
+                .forEach { editor.remove(it) }
+            editor.apply()
+            Log.d(TAG, "All conversation messages cleared from disk.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing all conversation messages", e)
+        }
+    }
+
     /**
      * Load all peer IDs that have at least one stored message.
      * Returns them ordered by the timestamp of the most recent message (newest first).
@@ -184,7 +198,15 @@ class MessageStore private constructor(context: Context) {
     fun getPeerDisplayName(peerId: String): String {
         val saved = getPeerAlias(peerId)
         if (!saved.isNullOrBlank()) return saved
-        val shortId = if (peerId.startsWith("NODE-")) peerId.removePrefix("NODE-").take(6) else peerId.takeLast(6)
+        // Clean up peerId: if it contains colons (e.g. Bluetooth MAC AA:BB:CC:DD:7A:AD), strip colons
+        val cleanId = peerId.replace(":", "").uppercase()
+        val shortId = if (cleanId.startsWith("NODE-")) {
+            cleanId.removePrefix("NODE-").take(6)
+        } else if (cleanId.length >= 4) {
+            cleanId.takeLast(4)
+        } else {
+            cleanId
+        }
         return "Peer $shortId"
     }
 }

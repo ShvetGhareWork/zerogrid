@@ -31,7 +31,6 @@ import com.example.zerogrid.navigation.Screen
 import com.example.zerogrid.navigation.ZeroGridBottomBar
 import com.example.zerogrid.network.AuthRepository
 import com.example.zerogrid.ui.components.ZeroGridDatePickerDialog
-import com.example.zerogrid.ui.components.ZeroGridTopBar
 import com.example.zerogrid.ui.theme.BadgeGreen
 import com.example.zerogrid.ui.theme.ZeroGridTheme
 import com.example.zerogrid.util.ValidationUtils
@@ -282,14 +281,6 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
-        topBar = {
-            ZeroGridTopBar(
-                peerCount = peers.size,
-                isMeshActive = isMeshActive,
-                onProfileClick = { onNavigate(Screen.PROFILE) }
-            )
-        },
-//        bottomBar = { ZeroGridBottomBar(currentScreen = Screen.SETTINGS, onNavigate = onNavigate) }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -520,14 +511,7 @@ fun SettingsScreen(
                                         actionText = "Open",
                                         onClick = { onNavigate(Screen.SOS_CENTER) }
                                     )
-                                    HorizontalDivider(color = colors.divider, thickness = 1.dp)
-                                    SettingsActionItem(
-                                        icon = Icons.Outlined.Folder,
-                                        title = "Encrypted File Vault",
-                                        subtitle = "Direct peer-to-peer off-grid transfers",
-                                        actionText = "Open",
-                                        onClick = { onNavigate(Screen.FILES) }
-                                    )
+
                                 }
                             }
 
