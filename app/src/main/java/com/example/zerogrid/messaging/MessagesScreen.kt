@@ -63,8 +63,9 @@ fun MessagesScreen(
     val localSuffix = remember(localNodeId) { localNodeId.removePrefix("NODE-") }
     val localDisplayName by meshEngine.displayName.collectAsState()
 
-    val filteredPeers = remember(connectedPeers, localNodeId, localDisplayName) {
+    val filteredPeers = remember(connectedPeers, activeChannelMode, localNodeId, localDisplayName) {
         connectedPeers.filter { node ->
+            node.transportType == activeChannelMode.transportName &&
             !node.nodeId.equals(localNodeId, ignoreCase = true) &&
             !node.nodeId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true) &&
             !node.alias.equals(localDisplayName, ignoreCase = true) &&

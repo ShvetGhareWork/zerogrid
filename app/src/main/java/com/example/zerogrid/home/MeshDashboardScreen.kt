@@ -41,9 +41,12 @@ fun MeshDashboardScreen(
 ) {
     val context = LocalContext.current
     val meshEngine = remember { MeshEngine.getInstance(context) }
-    val peers by meshEngine.connectedPeers.collectAsState()
+    val rawPeers by meshEngine.connectedPeers.collectAsState()
     val isMeshActive by meshEngine.isMeshActive.collectAsState()
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
+    val peers = remember(rawPeers, activeChannelMode) {
+        rawPeers.filter { it.transportType == activeChannelMode.transportName }
+    }
     val colors = ZeroGridTheme.colors
 
     val batteryPercent by produceState(initialValue = 100, context) {

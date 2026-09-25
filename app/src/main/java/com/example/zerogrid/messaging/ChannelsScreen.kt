@@ -32,7 +32,11 @@ import com.example.zerogrid.ui.theme.*
 fun ChannelsScreen(onNavigate: (Screen) -> Unit = {}) {
     var selectedFilter by remember { mutableStateOf("All") }
     val meshEngine = MeshEngine.getInstance(LocalContext.current)
-    val peers by meshEngine.connectedPeers.collectAsState()
+    val rawPeers by meshEngine.connectedPeers.collectAsState()
+    val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
+    val peers = remember(rawPeers, activeChannelMode) {
+        rawPeers.filter { it.transportType == activeChannelMode.transportName }
+    }
     val alerts by meshEngine.sosAlerts.collectAsState()
     val colors = ZeroGridTheme.colors
 

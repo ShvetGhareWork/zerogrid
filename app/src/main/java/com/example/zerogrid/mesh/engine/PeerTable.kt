@@ -52,20 +52,9 @@ class PeerTable(var localNodeId: String? = null) {
             }
             existing.availableTransports.addAll(node.availableTransports)
 
-            // Multi-interface deduplication: Automatically route through the interface with the stronger signal
-            val bleSignal = existing.bleRssi ?: -999
-            val wifiSignal = existing.wifiRssi ?: -999
-
-            if (wifiSignal > bleSignal && wifiSignal > -900) {
-                existing.transportType = MeshNode.TRANSPORT_WIFI_DIRECT
-                existing.rssi = wifiSignal
-            } else if (bleSignal > -900) {
-                existing.transportType = MeshNode.TRANSPORT_BLE
-                existing.rssi = bleSignal
-            } else {
-                existing.rssi = node.rssi
-                existing.transportType = node.transportType
-            }
+            // Update transport type and RSSI to the physical interface actively receiving this update
+            existing.rssi = node.rssi
+            existing.transportType = node.transportType
 
             // Update alias if incoming is a real custom display name
             if (isRealDisplayName(node.alias)) {
@@ -144,18 +133,40 @@ class PeerTable(var localNodeId: String? = null) {
         return peers[nodeId]
     }
 
-    fun getAllPeers(): List<MeshNode> = synchronized(lock) {
+    fun getAllPeers(transportFilter: String? = null): List<MeshNode> = synchronized(lock) {
         val myId = localNodeId
         return peers.values
             .filter { peer ->
-                if (myId != null) {
+                val isNotSelf = if (myId != null) {
                     !peer.nodeId.equals(myId, ignoreCase = true) &&
                     !peer.nodeId.removePrefix("NODE-").equals(myId.removePrefix("NODE-"), ignoreCase = true) &&
                     !peer.alias.equals(android.os.Build.MODEL, ignoreCase = true)
                 } else true
+                val matchesTransport = if (transportFilter != null) {
+                    peer.transportType.equals(transportFilter, ignoreCase = true)
+                } else true
+                isNotSelf && matchesTransport
             }
             .map { it.copy(availableTransports = java.util.concurrent.ConcurrentHashMap.newKeySet<String>().apply { addAll(it.availableTransports) }) }
             .sortedByDescending { it.lastSeenTimestamp }
+    }
+
+    fun removePeersByTransport(transportType: String) = synchronized(lock) {
+        peers.entries.removeIf { entry ->
+            entry.value.transportType.equals(transportType, ignoreCase = true)
+        }
+    }
+
+    fun clearInactiveTransportState(activeTransport: String) = synchronized(lock) {
+        peers.values.forEach { peer ->
+            if (activeTransport.equals(MeshNode.TRANSPORT_BLE, ignoreCase = true)) {
+                peer.wifiRssi = null
+                peer.availableTransports.remove(MeshNode.TRANSPORT_WIFI_DIRECT)
+            } else if (activeTransport.equals(MeshNode.TRANSPORT_WIFI_DIRECT, ignoreCase = true)) {
+                peer.bleRssi = null
+                peer.availableTransports.remove(MeshNode.TRANSPORT_BLE)
+            }
+        }
     }
 
     fun getDirectNeighbors(): List<MeshNode> = synchronized(lock) {

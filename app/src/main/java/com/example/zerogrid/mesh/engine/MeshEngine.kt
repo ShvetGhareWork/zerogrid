@@ -1,6 +1,12 @@
 package com.example.zerogrid.mesh.engine
 
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Log
 import com.example.zerogrid.messaging.MessageStatus
 import com.example.zerogrid.messaging.MessageStore
@@ -119,8 +125,67 @@ class MeshEngine private constructor(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    /**
+     * Publishes connected peers strictly filtered to the current active transport channel mode.
+     */
+    fun updateConnectedPeers() {
+        val activeTransport = _activeChannelMode.value.transportName
+        _connectedPeers.value = peerTable.getAllPeers(activeTransport)
+    }
+
+    private val hardwareStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    when (state) {
+                        BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
+                            Log.w(TAG, "Bluetooth turned OFF: stopping BLE discovery and flushing BLE peers")
+                            bleDriver.stopDiscovery()
+                            if (_activeChannelMode.value == MeshChannelMode.BLE) {
+                                peerTable.removePeersByTransport(MeshNode.TRANSPORT_BLE)
+                                updateConnectedPeers()
+                            }
+                        }
+                        BluetoothAdapter.STATE_ON -> {
+                            Log.i(TAG, "Bluetooth turned ON")
+                            if (_activeChannelMode.value == MeshChannelMode.BLE && _isMeshActive.value) {
+                                Log.i(TAG, "Restarting BLE discovery after Bluetooth re-enabled")
+                                bleDriver.startDiscovery()
+                                broadcastPeerAnnounce()
+                                updateConnectedPeers()
+                            }
+                        }
+                    }
+                }
+                WifiManager.WIFI_STATE_CHANGED_ACTION -> {
+                    val state = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)
+                    if (state == WifiManager.WIFI_STATE_DISABLED && _activeChannelMode.value == MeshChannelMode.WIFI_DIRECT) {
+                        Log.w(TAG, "Wi-Fi turned OFF: flushing Wi-Fi Direct peers")
+                        peerTable.removePeersByTransport(MeshNode.TRANSPORT_WIFI_DIRECT)
+                        updateConnectedPeers()
+                    }
+                }
+            }
+        }
+    }
+
     init {
         com.zerogrid.mesh.app.service.MeshPeerResolver.getInstance().setLocalNodeId(localNodeId)
+
+        try {
+            val filter = IntentFilter().apply {
+                addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+                addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(hardwareStateReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                context.registerReceiver(hardwareStateReceiver, filter)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register hardware state receiver in MeshEngine", e)
+        }
 
         // Zero-waste ephemeral messaging: purge persisted disk conversations so each app launch starts completely clean
         scope.launch {
@@ -144,7 +209,7 @@ class MeshEngine private constructor(private val context: Context) {
                     // Only register peer if it matches our active channel mode
                     if (peer.transportType.equals(_activeChannelMode.value.transportName, ignoreCase = true)) {
                         peerTable.updateOrAddPeer(peer)
-                        _connectedPeers.value = peerTable.getAllPeers()
+                        updateConnectedPeers()
                     }
                 }
             }
@@ -292,7 +357,8 @@ class MeshEngine private constructor(private val context: Context) {
 
     fun setMeshChannelMode(mode: MeshChannelMode) {
         if (_activeChannelMode.value == mode) return
-        Log.d(TAG, "Switching mesh channel mode to $mode")
+        val oldMode = _activeChannelMode.value
+        Log.d(TAG, "Switching mesh channel mode from $oldMode to $mode")
         _activeChannelMode.value = mode
         MeshChannelMode.saveMode(context, mode)
 
@@ -308,15 +374,20 @@ class MeshEngine private constructor(private val context: Context) {
                 routingEngine.registerTransport(wifiDirectDriver)
                 wifiDirectDriver.startDiscovery()
             }
-            // Retain only peers matching the active transport
-            val activeName = mode.transportName
-            _connectedPeers.value = peerTable.getAllPeers().filter { it.transportType == activeName }
+            // Purge peers and stale interface state belonging to the inactive transport
+            peerTable.removePeersByTransport(oldMode.transportName)
+            peerTable.clearInactiveTransportState(mode.transportName)
+            updateConnectedPeers()
         }
     }
 
     fun startMesh() {
         val mode = _activeChannelMode.value
         Log.d(TAG, "Starting ZeroGrid Mesh Engine in $mode mode (Node ID: $localNodeId, Name: ${_displayName.value})")
+        val inactiveTransport = if (mode == MeshChannelMode.BLE) MeshNode.TRANSPORT_WIFI_DIRECT else MeshNode.TRANSPORT_BLE
+        peerTable.removePeersByTransport(inactiveTransport)
+        peerTable.clearInactiveTransportState(mode.transportName)
+
         if (mode == MeshChannelMode.BLE) {
             wifiDirectDriver.stopDiscovery()
             routingEngine.unregisterTransport(wifiDirectDriver)
@@ -329,6 +400,7 @@ class MeshEngine private constructor(private val context: Context) {
             wifiDirectDriver.startDiscovery()
         }
         _isMeshActive.value = true
+        updateConnectedPeers()
     }
 
     fun stopMesh() {
@@ -338,6 +410,7 @@ class MeshEngine private constructor(private val context: Context) {
         routingEngine.unregisterTransport(bleDriver)
         routingEngine.unregisterTransport(wifiDirectDriver)
         _isMeshActive.value = false
+        _connectedPeers.value = emptyList()
     }
 
     /** Checks if a peer is currently reachable or active on the mesh. */
@@ -425,7 +498,7 @@ class MeshEngine private constructor(private val context: Context) {
     /** Prunes stale peers and retries delivery for all paused messages destined for online peers. */
     fun retryPausedMessages() {
         peerTable.pruneStalePeers(90_000L)
-        _connectedPeers.value = peerTable.getAllPeers()
+        updateConnectedPeers()
 
         val allConvs = _conversations.value
         allConvs.forEach { (peerId, msgs) ->
@@ -575,7 +648,7 @@ class MeshEngine private constructor(private val context: Context) {
                         availableTransports = mutableSetOf(MeshNode.TRANSPORT_BLE)
                     )
                     peerTable.updateOrAddPeer(peerNode)
-                    _connectedPeers.value = peerTable.getAllPeers()
+                    updateConnectedPeers()
                 }
             }
             PacketType.SOS_BEACON -> {

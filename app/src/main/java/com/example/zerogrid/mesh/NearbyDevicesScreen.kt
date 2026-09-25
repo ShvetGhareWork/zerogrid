@@ -45,7 +45,11 @@ fun NearbyDevicesScreen(
     val colors = ZeroGridTheme.colors
     var selectedFilter by remember { mutableStateOf("All") }
     val meshEngine = MeshEngine.getInstance(LocalContext.current)
-    val peers by meshEngine.connectedPeers.collectAsState()
+    val rawPeers by meshEngine.connectedPeers.collectAsState()
+    val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
+    val peers = remember(rawPeers, activeChannelMode) {
+        rawPeers.filter { it.transportType == activeChannelMode.transportName }
+    }
 
     val filteredPeers = remember(peers, selectedFilter) {
         when (selectedFilter) {
