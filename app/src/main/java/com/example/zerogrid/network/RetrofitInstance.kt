@@ -21,9 +21,9 @@ object RetrofitInstance {
     })
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        // Log full request/response body in debug builds only
+        // Log clean request line and response status in debug builds (avoids dumping multi-thousand-line JSON bodies)
         level = if (BuildConfig.DEBUG) {
-            HttpLoggingInterceptor.Level.BODY
+            HttpLoggingInterceptor.Level.BASIC
         } else {
             HttpLoggingInterceptor.Level.NONE
         }

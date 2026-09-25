@@ -31,16 +31,6 @@ fun AdminTopBar(
     onLogout: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
-    )
 
     Column(
         modifier = Modifier
@@ -82,7 +72,6 @@ fun AdminTopBar(
                         Box(
                             modifier = Modifier
                                 .size(6.dp)
-                                .alpha(if (socketState == AdminSocketState.CONNECTED) pulseAlpha else 1f)
                                 .background(statusColor, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
