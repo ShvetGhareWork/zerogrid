@@ -52,6 +52,8 @@ class MeshRoutingEngine(
         Log.d(TAG, "Unregistered transport: ${transport.transportName}")
     }
 
+    private val lastPeerDiscoveryReceived = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     fun processInboundPacket(packet: MeshPacket, sourceTransport: MeshTransport? = null) {
         // 0. Drop locally-originated packets (loopback/echo prevention)
         val localSuffix = localNodeId.removePrefix("NODE-")
@@ -66,6 +68,19 @@ class MeshRoutingEngine(
         if (deduplicationCache.isDuplicateAndRecord(packet.packetId)) {
             Log.d(TAG, "Dropped duplicate or locally-originated packet: ${packet.packetId}")
             return
+        }
+
+        // 1b. PEER_DISCOVERY Throttling Guard:
+        // Neighbor nodes send discovery announcements periodically.
+        // If we processed an announcement from this sender in the last 15s, quietly drop it
+        // to prevent routing engine churn, excessive logging, and UI state re-rendering.
+        if (packet.type == PacketType.PEER_DISCOVERY) {
+            val now = System.currentTimeMillis()
+            val lastSeen = lastPeerDiscoveryReceived[packet.senderId] ?: 0L
+            if (now - lastSeen < 15_000L) {
+                return
+            }
+            lastPeerDiscoveryReceived[packet.senderId] = now
         }
 
         val sourceName = sourceTransport?.transportName ?: "Local"
@@ -95,8 +110,11 @@ class MeshRoutingEngine(
             }
         }
 
-        // 3. Multi-Hop Forwarding & Relay (Only forward if broadcast or not targeted to me, and TTL > 1)
-        val shouldForward = (isBroadcast || !isTargetedToMe) && (packet.ttl > 1)
+        // 3. Multi-Hop Forwarding & Relay
+        // Broadcasts and non-local packets are forwarded if TTL > 1.
+        // PEER_DISCOVERY announcements are capped to max 2 hops to prevent infinite discovery broadcast loops.
+        val maxHopsForType = if (packet.type == PacketType.PEER_DISCOVERY) 2 else Int.MAX_VALUE
+        val shouldForward = (isBroadcast || !isTargetedToMe) && (packet.ttl > 1) && (packet.hopCount < maxHopsForType)
         if (shouldForward) {
             val relayedPacket = packet.copy(
                 ttl = packet.ttl - 1,

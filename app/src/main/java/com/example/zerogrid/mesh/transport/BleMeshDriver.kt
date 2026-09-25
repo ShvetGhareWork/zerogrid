@@ -25,7 +25,10 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.ParcelUuid
+import android.os.Process
 import androidx.core.content.ContextCompat
 import com.example.zerogrid.debug.DebugLevel
 import com.example.zerogrid.debug.DebugLogger
@@ -237,6 +240,20 @@ class BleMeshDriver(
     private var gattServer: BluetoothGattServer? = null
     private var isScanning = false
 
+    /** Dedicated background HandlerThread so BluetoothLeScanner dispatches callbacks off the main thread. */
+    private val scanThread: HandlerThread by lazy {
+        HandlerThread("BleScanWorkerThread", Process.THREAD_PRIORITY_BACKGROUND).apply { start() }
+    }
+    private val scanHandler: Handler by lazy {
+        Handler(scanThread.looper)
+    }
+
+    /** Bounded cache of recently processed packet IDs to drop redundant reassembly cycles early. */
+    private val recentlySeenPacketIds = ConcurrentHashMap.newKeySet<String>()
+
+    /** Tracks last discovery timestamp per logical NodeID to prevent scan event flooding. */
+    private val lastPeerDiscoveryDispatched = ConcurrentHashMap<String, Long>()
+
     /** Tracks the timestamp of the last successful startScan() call to enforce 5-second cooldown. */
     private val lastScanStartTime = AtomicLong(0L)
 
@@ -305,6 +322,8 @@ class BleMeshDriver(
         nodeToDeviceMap.clear()
         addressToNodeMap.clear()
         reassemblySessions.clear()
+        recentlySeenPacketIds.clear()
+        lastPeerDiscoveryDispatched.clear()
         DebugLogger.log(TAG, "BLE discovery stopped", DebugLevel.INFO)
     }
 
@@ -896,6 +915,15 @@ class BleMeshDriver(
             return
         }
 
+        // Early duplicate filter: drop duplicate packet IDs before redundant re-processing
+        if (recentlySeenPacketIds.contains(packet.packetId)) {
+            return
+        }
+        if (recentlySeenPacketIds.size > 500) {
+            recentlySeenPacketIds.clear()
+        }
+        recentlySeenPacketIds.add(packet.packetId)
+
         DebugLogger.log(TAG, "📬 Packet reassembled: type=${packet.type} from=${packet.senderId}", DebugLevel.INFO)
 
         // Dynamic routing update: map sender's logical NodeID to the fresh BluetoothDevice handle
@@ -997,30 +1025,36 @@ class BleMeshDriver(
             DebugLogger.log(TAG, "Scan cooldown active (${elapsed}ms elapsed) — skipping startScan", DebugLevel.DEBUG)
             return
         }
-        try {
-            bleScanner = bluetoothAdapter?.bluetoothLeScanner ?: return
-            val filter = ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(SERVICE_UUID))
-                .build()
-            val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-                .build()
-            bleScanner?.startScan(listOf(filter), settings, scanCallback)
-            isScanning = true
-            lastScanStartTime.set(System.currentTimeMillis())
-            DebugLogger.log(TAG, "BLE scan started — filtering for SERVICE_UUID $SERVICE_UUID", DebugLevel.INFO)
-        } catch (e: Exception) {
-            DebugLogger.log(TAG, "Error starting BLE scan: ${e.message}", DebugLevel.ERROR)
+        // Execute startScan on dedicated background HandlerThread so Bluetooth binder dispatches callbacks off the main thread
+        scanHandler.post {
+            try {
+                if (isScanning) return@post
+                bleScanner = bluetoothAdapter?.bluetoothLeScanner ?: return@post
+                val filter = ScanFilter.Builder()
+                    .setServiceUuid(ParcelUuid(SERVICE_UUID))
+                    .build()
+                val settings = ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                    .build()
+                bleScanner?.startScan(listOf(filter), settings, scanCallback)
+                isScanning = true
+                lastScanStartTime.set(System.currentTimeMillis())
+                DebugLogger.log(TAG, "BLE scan started on background thread — filtering for SERVICE_UUID $SERVICE_UUID", DebugLevel.INFO)
+            } catch (e: Exception) {
+                DebugLogger.log(TAG, "Error starting BLE scan: ${e.message}", DebugLevel.ERROR)
+            }
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun stopScanning() {
-        if (!isScanning) return
-        try {
-            bleScanner?.stopScan(scanCallback)
-            isScanning = false
-        } catch (_: Exception) {}
+        scanHandler.post {
+            if (!isScanning) return@post
+            try {
+                bleScanner?.stopScan(scanCallback)
+                isScanning = false
+            } catch (_: Exception) {}
+        }
     }
 
     private fun pauseScanningForConnect() {
@@ -1042,85 +1076,101 @@ class BleMeshDriver(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
-            result?.let { scanResult ->
-                try {
-                    val device = scanResult.device
-                    val rssi = scanResult.rssi
-                    val deviceName = try { device.name } catch (_: SecurityException) { null } ?: "Peer"
-                    val deviceAddress = try { device.address } catch (_: SecurityException) { null } ?: return
-
-                    // Extract advertised custom display name from scan response
-                    val nameData = scanResult.scanRecord?.getServiceData(ParcelUuid(NAME_SERVICE_UUID))
-                    val advertisedName = if (nameData != null && nameData.isNotEmpty()) String(nameData, Charsets.UTF_8).trim() else ""
-
-                    // Extract advertised NodeID from ServiceData
-                    val sData = scanResult.scanRecord?.getServiceData(ParcelUuid(SERVICE_UUID))
-                    val nodeSuffix = if (sData != null && sData.isNotEmpty()) String(sData, Charsets.UTF_8) else ""
-                    val logicalNodeId = if (nodeSuffix.isNotEmpty()) "NODE-$nodeSuffix" else deviceAddress
-
-                    // CRITICAL: Filter out own device's BLE advertisements!
-                    val localSuffix = localNodeId.removePrefix("NODE-")
-                    if (nodeSuffix.isNotBlank() && nodeSuffix.equals(localSuffix, ignoreCase = true)) {
-                        return // Own node suffix advertisement
-                    }
-                    if (logicalNodeId.equals(localNodeId, ignoreCase = true) || logicalNodeId.equals(localSuffix, ignoreCase = true)) {
-                        return // Own logical node
-                    }
-                    if (advertisedName.isNotBlank() && advertisedName.equals(localDisplayName, ignoreCase = true)) {
-                        return // Own display name
-                    }
-                    if (deviceName.isNotBlank() && (deviceName.equals(localDisplayName, ignoreCase = true) || deviceName.equals(android.os.Build.MODEL, ignoreCase = true))) {
-                        return // Own device name or model
-                    }
-                    val myBtAddress = try { bluetoothAdapter?.address } catch (_: SecurityException) { null }
-                    if (myBtAddress != null && myBtAddress != "02:00:00:00:00:00" && deviceAddress.equals(myBtAddress, ignoreCase = true)) {
-                        return // Own hardware MAC address
-                    }
-
-                    // Always update mapping to the freshest BluetoothDevice handle (RPA rotation fix)
-                    nodeToDeviceMap[logicalNodeId] = device
-                    addressToNodeMap[deviceAddress] = logicalNodeId
-                    discoveredDevices[deviceAddress] = device
-                    discoveredDevices[logicalNodeId] = device
-
-                    val alias = when {
-                        advertisedName.isNotBlank() -> advertisedName
-                        deviceName.isNotBlank() && deviceName != "Peer" -> deviceName
-                        else -> "Peer ${logicalNodeId.takeLast(4)}"
-                    }
-
-                    // Record endpoint in background interface deduplication engine
-                    com.zerogrid.mesh.app.service.MeshPeerResolver.getInstance().recordEndpoint(
-                        uniqueDeviceId = logicalNodeId,
-                        interfaceType = com.zerogrid.mesh.app.service.NetworkInterfaceType.BLUETOOTH_LE,
-                        address = deviceAddress,
-                        rssi = rssi,
-                        metadata = mapOf("alias" to alias)
-                    )
-
-                    DebugLogger.log(TAG, "🔭 BLE peer found: $logicalNodeId ($alias) RSSI=$rssi", DebugLevel.DEBUG)
-
-                    val peerNode = MeshNode(
-                        nodeId = logicalNodeId,
-                        alias = alias,
-                        rssi = rssi,
-                        transportType = MeshNode.TRANSPORT_BLE,
-                        bleRssi = rssi,
-                        lastSeenTimestamp = System.currentTimeMillis(),
-                        hopDistance = 1,
-                        isDirectNeighbor = true,
-                        availableTransports = mutableSetOf(MeshNode.TRANSPORT_BLE)
-                    )
-                    scope.launch { _peerDiscoveryFlow.emit(peerNode) }
-                } catch (e: Exception) {
-                    DebugLogger.log(TAG, "Scan result error: ${e.message}", DebugLevel.ERROR)
-                }
+            val scanResult = result ?: return
+            // Immediately offload all parsing, caching, resolver recording, and logging to background worker pool
+            scope.launch(Dispatchers.Default) {
+                processScanResult(scanResult)
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
             DebugLogger.log(TAG, "BLE scan failed: code=$errorCode", DebugLevel.ERROR)
             isScanning = false
+        }
+    }
+
+    private suspend fun processScanResult(scanResult: ScanResult) {
+        try {
+            val device = scanResult.device
+            val rssi = scanResult.rssi
+            val deviceName = try { device.name } catch (_: SecurityException) { null } ?: "Peer"
+            val deviceAddress = try { device.address } catch (_: SecurityException) { null } ?: return
+
+            // Extract advertised custom display name from scan response
+            val nameData = scanResult.scanRecord?.getServiceData(ParcelUuid(NAME_SERVICE_UUID))
+            val advertisedName = if (nameData != null && nameData.isNotEmpty()) String(nameData, Charsets.UTF_8).trim() else ""
+
+            // Extract advertised NodeID from ServiceData
+            val sData = scanResult.scanRecord?.getServiceData(ParcelUuid(SERVICE_UUID))
+            val nodeSuffix = if (sData != null && sData.isNotEmpty()) String(sData, Charsets.UTF_8) else ""
+            val logicalNodeId = if (nodeSuffix.isNotEmpty()) "NODE-$nodeSuffix" else deviceAddress
+
+            // CRITICAL: Filter out own device's BLE advertisements!
+            val localSuffix = localNodeId.removePrefix("NODE-")
+            if (nodeSuffix.isNotBlank() && nodeSuffix.equals(localSuffix, ignoreCase = true)) {
+                return // Own node suffix advertisement
+            }
+            if (logicalNodeId.equals(localNodeId, ignoreCase = true) || logicalNodeId.equals(localSuffix, ignoreCase = true)) {
+                return // Own logical node
+            }
+            if (advertisedName.isNotBlank() && advertisedName.equals(localDisplayName, ignoreCase = true)) {
+                return // Own display name
+            }
+            if (deviceName.isNotBlank() && (deviceName.equals(localDisplayName, ignoreCase = true) || deviceName.equals(android.os.Build.MODEL, ignoreCase = true))) {
+                return // Own device name or model
+            }
+            val myBtAddress = try { bluetoothAdapter?.address } catch (_: SecurityException) { null }
+            if (myBtAddress != null && myBtAddress != "02:00:00:00:00:00" && deviceAddress.equals(myBtAddress, ignoreCase = true)) {
+                return // Own hardware MAC address
+            }
+
+            // Always update mapping to the freshest BluetoothDevice handle (RPA rotation fix)
+            nodeToDeviceMap[logicalNodeId] = device
+            addressToNodeMap[deviceAddress] = logicalNodeId
+            discoveredDevices[deviceAddress] = device
+            discoveredDevices[logicalNodeId] = device
+
+            // RATE-LIMITING GUARD:
+            // Nearby devices advertise continuously (every 200ms–1s).
+            // Do not spam endpoint recording, logging, or UI recompositions if we dispatched for this peer within 10s.
+            val now = System.currentTimeMillis()
+            val lastDispatched = lastPeerDiscoveryDispatched[logicalNodeId] ?: 0L
+            if (now - lastDispatched < 10_000L) {
+                return // Fresh device handle is cached above, but skip expensive downstream dispatch
+            }
+            lastPeerDiscoveryDispatched[logicalNodeId] = now
+
+            val alias = when {
+                advertisedName.isNotBlank() -> advertisedName
+                deviceName.isNotBlank() && deviceName != "Peer" -> deviceName
+                else -> "Peer ${logicalNodeId.takeLast(4)}"
+            }
+
+            // Record endpoint in background interface deduplication engine
+            com.zerogrid.mesh.app.service.MeshPeerResolver.getInstance().recordEndpoint(
+                uniqueDeviceId = logicalNodeId,
+                interfaceType = com.zerogrid.mesh.app.service.NetworkInterfaceType.BLUETOOTH_LE,
+                address = deviceAddress,
+                rssi = rssi,
+                metadata = mapOf("alias" to alias)
+            )
+
+            DebugLogger.log(TAG, "🔭 BLE peer found: $logicalNodeId ($alias) RSSI=$rssi", DebugLevel.DEBUG)
+
+            val peerNode = MeshNode(
+                nodeId = logicalNodeId,
+                alias = alias,
+                rssi = rssi,
+                transportType = MeshNode.TRANSPORT_BLE,
+                bleRssi = rssi,
+                lastSeenTimestamp = System.currentTimeMillis(),
+                hopDistance = 1,
+                isDirectNeighbor = true,
+                availableTransports = mutableSetOf(MeshNode.TRANSPORT_BLE)
+            )
+            _peerDiscoveryFlow.emit(peerNode)
+        } catch (e: Exception) {
+            DebugLogger.log(TAG, "Scan result error: ${e.message}", DebugLevel.ERROR)
         }
     }
 }
