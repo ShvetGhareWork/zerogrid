@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -19,27 +20,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.navigation.Screen
-import com.example.zerogrid.navigation.ZeroGridBottomBar
 import com.example.zerogrid.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-import com.example.zerogrid.hardware.HardwareStateManager
-import com.example.zerogrid.hardware.WifiRequiredDialog
-import com.example.zerogrid.mesh.engine.MeshNode
-
-/**
- * Per-peer direct message chat screen.
- * Shows persistent conversation history (survives reconnections) and live incoming messages.
- */
 @Composable
 fun PeerDirectChatScreen(
     peerId: String,
@@ -58,10 +52,10 @@ fun PeerDirectChatScreen(
     val conversations by meshEngine.conversations.collectAsState()
     val connectedPeers by meshEngine.connectedPeers.collectAsState()
 
-    // Live conversation — updates from the StateFlow as new messages arrive/are sent
+    // Live conversation
     val messages = conversations[peerId] ?: emptyList()
 
-    // Resolve display name from connected peers or persistent MessageStore alias cache
+    // Resolve display name
     val peer = connectedPeers.firstOrNull { it.nodeId == peerId }
     val displayName = peer?.alias?.takeIf { !it.startsWith("Peer ") && it.isNotBlank() }
         ?: messageStore.getPeerDisplayName(peerId)
@@ -72,8 +66,11 @@ fun PeerDirectChatScreen(
 
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom when new messages arrive
-    LaunchedEffect(messages.size) {
+    // Check if keyboard is open to properly scroll
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+    // Auto-scroll to bottom when new messages arrive or keyboard opens
+    LaunchedEffect(messages.size, isImeVisible) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -104,11 +101,17 @@ fun PeerDirectChatScreen(
             )
         },
         bottomBar = {
-            Column {
+            // Placing the input inside the bottomBar slot ensures Scaffold resizes the chat list perfectly
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .imePadding() // Pushes the input bar precisely above the keyboard
+            ) {
+                // Active Channel Indicator
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(colors.background)
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -126,6 +129,8 @@ fun PeerDirectChatScreen(
                         fontFamily = FontFamily.Monospace
                     )
                 }
+
+                // Chat Input Field
                 PeerChatInputBar(
                     messageText = messageText,
                     onValueChange = { messageText = it },
@@ -139,18 +144,21 @@ fun PeerDirectChatScreen(
                     isOnline = isOnline,
                     enabled = true
                 )
-                ZeroGridBottomBar(currentScreen = Screen.MESSAGES, onNavigate = onNavigate)
             }
         }
     ) { paddingValues ->
-        if (messages.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Main content area automatically fits between TopBar and BottomBar
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Box(
                         modifier = Modifier
                             .size(64.dp)
@@ -195,35 +203,34 @@ fun PeerDirectChatScreen(
                         )
                     }
                 }
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
-            ) {
-                items(messages, key = { it.id }) { msg ->
-                    if (msg.isMine) {
-                        SentMessageBubble(
-                            msg = msg,
-                            onRetryClick = {
-                                val retried = meshEngine.retryMessage(peerId, msg.id)
-                                if (!retried) {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Peer is still offline. ZeroGrid will retry automatically every 15s.",
-                                            duration = SnackbarDuration.Short
-                                        )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        if (msg.isMine) {
+                            SentMessageBubble(
+                                msg = msg,
+                                onRetryClick = {
+                                    val retried = meshEngine.retryMessage(peerId, msg.id)
+                                    if (!retried) {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "Peer is still offline. ZeroGrid will retry automatically every 15s.",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                        )
-                    } else {
-                        ReceivedMessageBubble(msg, displayName)
+                            )
+                        } else {
+                            ReceivedMessageBubble(msg, displayName)
+                        }
                     }
                 }
             }
@@ -353,28 +360,28 @@ private fun SentMessageBubble(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 280.dp)
+                .widthIn(min = 60.dp, max = 280.dp)
                 .background(
                     if (isPaused) Color(0xFFFFB74D).copy(alpha = 0.15f) else colors.primary.copy(alpha = 0.15f),
-                    RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
+                    RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp)
                 )
                 .then(
-                    if (isPaused) Modifier.border(1.dp, Color(0xFFFFB74D).copy(alpha = 0.5f), RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
+                    if (isPaused) Modifier.border(1.dp, Color(0xFFFFB74D).copy(alpha = 0.5f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp))
                     else Modifier
                 )
                 .clickable(enabled = isPaused) { onRetryClick() }
-                .padding(12.dp, 10.dp)
+                .padding(10.dp, 8.dp)
         ) {
-            Column {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = msg.text,
                     color = if (isPaused) colors.textPrimary else colors.primary,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.align(Alignment.Start)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(
-                    modifier = Modifier.align(Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -432,7 +439,6 @@ private fun SentMessageBubble(
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
                             .background(Color(0xFFFFB74D).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -446,7 +452,7 @@ private fun SentMessageBubble(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Paused • Peer offline • Tap to retry",
+                            text = "Tap to retry",
                             color = Color(0xFFFFB74D),
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
@@ -468,42 +474,24 @@ private fun ReceivedMessageBubble(msg: StoredMessage, senderName: String) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Bottom
     ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .background(colors.surfaceNested, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = senderName.first().uppercaseChar().toString(),
-                color = colors.textPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
         Column {
-            Text(
-                text = senderName,
-                color = colors.textSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
             Box(
                 modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .background(colors.cardBackground, RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
-                    .padding(12.dp, 10.dp)
+                    .widthIn(min = 60.dp, max = 280.dp)
+                    .background(
+                        colors.cardBackground,
+                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+                    )
+                    .padding(10.dp, 8.dp)
             ) {
-                Column {
+                Column(horizontalAlignment = Alignment.Start) {
                     Text(
                         text = msg.text,
                         color = colors.textPrimary,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         lineHeight = 20.sp
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         modifier = Modifier.align(Alignment.End),
                         verticalAlignment = Alignment.CenterVertically,
@@ -539,7 +527,7 @@ private fun PeerChatInputBar(
     enabled: Boolean
 ) {
     val colors = ZeroGridTheme.colors
-    Column {
+    Column(modifier = Modifier.padding(bottom = 6.dp)) {
         HorizontalDivider(color = colors.divider, thickness = 1.dp)
         if (!isOnline) {
             Row(
@@ -568,9 +556,8 @@ private fun PeerChatInputBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(colors.background)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
@@ -578,14 +565,14 @@ private fun PeerChatInputBar(
                 onValueChange = onValueChange,
                 placeholder = {
                     Text(
-                        text = if (isOnline) "Send a message..." else "Message (pauses if offline)...",
+                        text = if (isOnline) "Message" else "Message (offline)...",
                         color = colors.textSecondary,
-                        fontSize = 14.sp
+                        fontSize = 15.sp
                     )
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(50.dp),
+                    .defaultMinSize(minHeight = 48.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = colors.cardBackground,
@@ -596,23 +583,26 @@ private fun PeerChatInputBar(
                     focusedTextColor = colors.textPrimary,
                     unfocusedTextColor = colors.textPrimary
                 ),
-                singleLine = true
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                maxLines = 5
             )
-            Button(
-                onClick = onSend,
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (enabled && messageText.isNotBlank()) colors.primary else colors.surfaceNested,
-                    disabledContainerColor = colors.surfaceNested
-                ),
-                enabled = enabled && messageText.isNotBlank(),
-                contentPadding = PaddingValues(0.dp)
+
+            val isReadyToSend = enabled && messageText.isNotBlank()
+
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        if (isReadyToSend) colors.primary else colors.surfaceNested,
+                        CircleShape
+                    )
+                    .clickable(enabled = isReadyToSend) { onSend() },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send",
-                    tint = if (enabled && messageText.isNotBlank()) (if (colors.isDark) Color.Black else Color.White) else colors.textSecondary,
+                    tint = if (isReadyToSend) (if (colors.isDark) Color.Black else Color.White) else colors.textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
