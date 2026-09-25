@@ -1,17 +1,15 @@
 package com.example.zerogrid.emergency
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,9 +26,9 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.mesh.engine.MeshPacket
 import com.example.zerogrid.navigation.Screen
-import com.example.zerogrid.navigation.ZeroGridBottomBar
 import com.example.zerogrid.ui.theme.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SosCenterScreen(
     onNavigate: (Screen) -> Unit = {},
@@ -145,190 +143,218 @@ fun SosCenterScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = { EmergencyTopBar(onBackClick = { onNavigate(Screen.HOME) }) },
+        topBar = { EmergencyTopBar() },
     ) { paddingValues ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item(key = "mesh_status_banner") {
-                MeshStatusBanner(peers.size)
-            }
+            val isTablet = maxWidth >= 600.dp
+            val horizontalPadding = if (isTablet) 32.dp else 20.dp
 
-            // ── SECTION 1: RELATIVE / FAMILY EMERGENCY SOS ──────────────
-            item(key = "relative_sos_header") {
-                SosSectionHeader(
-                    label = "FAMILY & RELATIVE EMERGENCY SOS",
-                    count = relativeAlerts.size,
-                    dotColor = colors.accentRed,
-                    isActive = relativeAlerts.isNotEmpty()
-                )
-            }
-            item(key = "relative_sos_content") {
-                if (relativeAlerts.isEmpty()) {
-                    SosAllClearCard(
-                        message = "No active family alerts",
-                        subtitle = "Family & relative emergencies appear here"
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        relativeAlerts.forEach { alert ->
-                            SosAlertCard(
-                                alert = alert,
-                                sectionType = SosType.RELATIVE,
-                                onAcknowledgeClick = { pendingAckAlert = alert },
-                                onTrackSos = onTrackSos
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = horizontalPadding),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+
+                // ── 1. EMERGENCY SOS BUTTON (Sticky Header) ─────────────────
+                stickyHeader(key = "emergency_sos_button") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colors.background) // Prevents items from bleeding through when scrolling
+                            .padding(top = 4.dp, bottom = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                            EmergencySosStickyButton(onSendSosClick = { onNavigate(Screen.SEND_SOS) })
+                        }
+                    }
+                }
+
+                // ── 1.5 EMERGENCY SOS INFO CARD (Scrolls under the button) ──
+                item(key = "emergency_sos_info") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        EmergencySosInfoCard()
+                    }
+                }
+
+                // ── 2. EMERGENCY CONTACTS QUICK ACCESS ─────────
+                item(key = "emergency_contacts_quick") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable { onNavigate(Screen.EMERGENCY_CONTACTS) },
+                            colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, colors.divider)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(38.dp).background(colors.primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                    Icon(imageVector = Icons.Outlined.ContactPhone, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Emergency Contacts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Manage trusted contacts for SOS dispatch", color = colors.textSecondary, fontSize = 12.sp)
+                                }
+                                Icon(imageVector = Icons.Outlined.ChevronRight, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+
+                item(key = "mesh_status_banner") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        MeshStatusBanner(peers.size)
+                    }
+                }
+
+                // ── 3. FAMILY & RELATIVE EMERGENCY SOS ─────────
+                item(key = "relative_sos_header") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        SosSectionHeader(
+                            label = "FAMILY & RELATIVE EMERGENCY SOS",
+                            count = relativeAlerts.size,
+                            dotColor = colors.accentRed,
+                            isActive = relativeAlerts.isNotEmpty()
+                        )
+                    }
+                }
+                item(key = "relative_sos_content") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        if (relativeAlerts.isEmpty()) {
+                            SosAllClearCard(
+                                message = "No active family alerts",
+                                subtitle = "Family & relative emergencies appear here"
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                relativeAlerts.forEach { alert ->
+                                    SosAlertCard(
+                                        alert = alert,
+                                        sectionType = SosType.RELATIVE,
+                                        onAcknowledgeClick = { pendingAckAlert = alert },
+                                        onTrackSos = onTrackSos
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── 4. LOCAL AREA MESH SOS ─────────────────────────
+                item(key = "local_sos_header") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        SosSectionHeader(
+                            label = "LOCAL AREA MESH SOS",
+                            count = localMeshAlerts.size,
+                            dotColor = Color(0xFFF59E0B),
+                            isActive = localMeshAlerts.isNotEmpty()
+                        )
+                    }
+                }
+                item(key = "local_sos_content") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        if (localMeshAlerts.isEmpty()) {
+                            SosAllClearCard(
+                                message = "No active local mesh alerts",
+                                subtitle = "Nearby peer SOS beacons appear here"
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                localMeshAlerts.forEach { alert ->
+                                    SosAlertCard(
+                                        alert = alert,
+                                        sectionType = SosType.LOCAL_MESH,
+                                        onAcknowledgeClick = { pendingAckAlert = alert },
+                                        onTrackSos = onTrackSos
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── 5. MY OWN ACTIVE BROADCASTS ────────────────────────────────
+                if (myActiveAlerts.isNotEmpty()) {
+                    item(key = "my_sos_header") {
+                        Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                            SosSectionHeader(
+                                label = "MY ACTIVE BROADCAST",
+                                count = myActiveAlerts.size,
+                                dotColor = colors.primary,
+                                isActive = true
                             )
                         }
                     }
+                    item(key = "my_sos_content") {
+                        Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                myActiveAlerts.forEach { alert ->
+                                    SosAlertCard(
+                                        alert = alert,
+                                        sectionType = SosType.MINE,
+                                        onAcknowledgeClick = {},
+                                        onTrackSos = onTrackSos
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-            }
 
-            // ── SECTION 2: LOCAL AREA MESH SOS ─────────────────────────
-            item(key = "local_sos_header") {
-                SosSectionHeader(
-                    label = "LOCAL AREA MESH SOS",
-                    count = localMeshAlerts.size,
-                    dotColor = Color(0xFFF59E0B),
-                    isActive = localMeshAlerts.isNotEmpty()
-                )
-            }
-            item(key = "local_sos_content") {
-                if (localMeshAlerts.isEmpty()) {
-                    SosAllClearCard(
-                        message = "No active local mesh alerts",
-                        subtitle = "Nearby peer SOS beacons appear here"
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        localMeshAlerts.forEach { alert ->
-                            SosAlertCard(
-                                alert = alert,
-                                sectionType = SosType.LOCAL_MESH,
-                                onAcknowledgeClick = { pendingAckAlert = alert },
-                                onTrackSos = onTrackSos
+                // ── 6. ACKNOWLEDGED SOS HISTORY ───────────────────────────────
+                if (acknowledgedAlerts.isNotEmpty()) {
+                    item(key = "acked_header") {
+                        Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                            SosSectionHeader(
+                                label = "ACKNOWLEDGED SOS HISTORY",
+                                count = acknowledgedAlerts.size,
+                                dotColor = colors.primary,
+                                isActive = false
                             )
                         }
                     }
-                }
-            }
-
-            // ── MY OWN ACTIVE BROADCASTS ────────────────────────────────
-            if (myActiveAlerts.isNotEmpty()) {
-                item(key = "my_sos_header") {
-                    SosSectionHeader(
-                        label = "MY ACTIVE BROADCAST",
-                        count = myActiveAlerts.size,
-                        dotColor = colors.primary,
-                        isActive = true
-                    )
-                }
-                item(key = "my_sos_content") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        myActiveAlerts.forEach { alert ->
-                            SosAlertCard(
-                                alert = alert,
-                                sectionType = SosType.MINE,
-                                onAcknowledgeClick = {},
-                                onTrackSos = onTrackSos
-                            )
+                    item(key = "acked_content") {
+                        Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                acknowledgedAlerts.forEach { alert ->
+                                    AcknowledgedAlertRow(alert = alert, onTrackSos = onTrackSos)
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            // ── EMERGENCY SOS DISPATCH ─────────────────────────────────
-            item(key = "emergency_sos_card") {
-                EmergencySosCard(onSendSosClick = { onNavigate(Screen.SEND_SOS) })
-            }
-
-            // ── EMERGENCY CONTACTS QUICK ACCESS ────────────────────────
-            item(key = "emergency_contacts_quick") {
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable { onNavigate(Screen.EMERGENCY_CONTACTS) },
-                    colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, colors.divider)
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(38.dp).background(colors.primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                            Icon(imageVector = Icons.Outlined.ContactPhone, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Emergency Contacts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Manage trusted contacts for SOS dispatch", color = colors.textSecondary, fontSize = 12.sp)
-                        }
-                        Icon(imageVector = Icons.Outlined.ChevronRight, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-
-            // ── ACKNOWLEDGED SOS HISTORY ───────────────────────────────
-            if (acknowledgedAlerts.isNotEmpty()) {
-                item(key = "acked_header") {
-                    SosSectionHeader(
-                        label = "ACKNOWLEDGED SOS HISTORY",
-                        count = acknowledgedAlerts.size,
-                        dotColor = colors.primary,
-                        isActive = false
-                    )
-                }
-                item(key = "acked_content") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        acknowledgedAlerts.forEach { alert ->
-                            AcknowledgedAlertRow(alert = alert, onTrackSos = onTrackSos)
+                // ── 7. NETWORK REACH ──────────────────────────────────────────
+                item(key = "network_reach_section") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        val maxHops = if (peers.isEmpty()) 0 else peers.maxOf { it.hopDistance }
+                        val lastAlert = alerts.maxByOrNull { it.timestamp }
+                        val lastBroadcastTime = if (lastAlert != null) {
+                            java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+                                .format(java.util.Date(lastAlert.timestamp))
+                        } else "None"
+                        val deliveryStatus = if (peers.isNotEmpty()) "100% (Mesh)" else if (alerts.isNotEmpty()) "Relayed" else "Standby"
+                        Column {
+                            Text(text = "NETWORK REACH", color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            NetworkReachSection(reachableCount = peers.size, maxHops = maxHops, lastBroadcastTime = lastBroadcastTime, deliveryStatus = deliveryStatus)
                         }
                     }
                 }
-            }
 
-            // ── NETWORK REACH ──────────────────────────────────────────
-            item(key = "network_reach_section") {
-                val maxHops = if (peers.isEmpty()) 0 else peers.maxOf { it.hopDistance }
-                val lastAlert = alerts.maxByOrNull { it.timestamp }
-                val lastBroadcastTime = if (lastAlert != null) {
-                    java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-                        .format(java.util.Date(lastAlert.timestamp))
-                } else "None"
-                val deliveryStatus = if (peers.isNotEmpty()) "100% (Mesh)" else if (alerts.isNotEmpty()) "Relayed" else "Standby"
-                Column {
-                    Text(text = "NETWORK REACH", color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    NetworkReachSection(reachableCount = peers.size, maxHops = maxHops, lastBroadcastTime = lastBroadcastTime, deliveryStatus = deliveryStatus)
-                }
-            }
-
-            // ── QUICK ACTIONS ──────────────────────────────────────────
-            item(key = "quick_actions_row") {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QuickActionButton(modifier = Modifier.weight(1f), icon = Icons.Outlined.Campaign, title = "Broadcast\nSOS", onClick = { onNavigate(Screen.SEND_SOS) })
-                    QuickActionButton(modifier = Modifier.weight(1f), icon = Icons.Outlined.RssFeed, title = "Emergency\nContacts", onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) })
-                }
-            }
-
-            item(key = "manage_contacts_button") {
-                Button(
-                    onClick = { onNavigate(Screen.EMERGENCY_CONTACTS) },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.cardBackground),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, colors.divider)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Outlined.ContactEmergency, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("Manage Emergency Contacts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                // ── 8. HOW SOS WORKS ─────────────────────────────────────────
+                item(key = "how_sos_works_card") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        HowSosWorksCard()
                     }
                 }
-            }
-
-            item(key = "how_sos_works_card") {
-                HowSosWorksCard()
             }
         }
     }
@@ -382,13 +408,15 @@ private fun SosAlertCard(
     onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
 ) {
     val colors = ZeroGridTheme.colors
+    val isRelative = sectionType == SosType.RELATIVE
+
     val accentColor = when (sectionType) {
         SosType.RELATIVE   -> colors.accentRed
         SosType.LOCAL_MESH -> Color(0xFFF59E0B)
         SosType.MINE       -> colors.primary
     }
     val tagLabel = when (sectionType) {
-        SosType.RELATIVE   -> "RELATIVE"
+        SosType.RELATIVE   -> "URGENT FAMILY ALERT"
         SosType.LOCAL_MESH -> "LOCAL MESH"
         SosType.MINE       -> "SENT BY ME"
     }
@@ -401,47 +429,66 @@ private fun SosAlertCard(
     val accuracy = alert.getSosAccuracy()
 
     Card(
-        modifier = Modifier.fillMaxWidth().border(1.dp, accentColor.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
+        modifier = Modifier.fillMaxWidth().border(
+            width = if (isRelative) 2.dp else 1.dp,
+            color = if (isRelative) colors.accentRed else accentColor.copy(alpha = 0.7f),
+            shape = RoundedCornerShape(12.dp)
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRelative) colors.accentRed.copy(alpha = 0.08f) else colors.cardBackground
+        ),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).background(accentColor, CircleShape))
+                    if (isRelative) {
+                        Icon(imageVector = Icons.Outlined.WarningAmber, contentDescription = null, tint = colors.accentRed, modifier = Modifier.size(20.dp))
+                    } else {
+                        Box(modifier = Modifier.size(8.dp).background(accentColor, CircleShape))
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = when (sectionType) { SosType.LOCAL_MESH -> "Local Peer Alert"; SosType.MINE -> "My Broadcast"; else -> "Relative Emergency" },
-                        color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold
+                        text = when (sectionType) { SosType.LOCAL_MESH -> "Local Peer Alert"; SosType.MINE -> "My Broadcast"; else -> "Family Emergency" },
+                        color = if (isRelative) colors.accentRed else colors.textPrimary,
+                        fontSize = if (isRelative) 16.sp else 15.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
                 Text(
-                    text = tagLabel, color = accentColor, fontSize = 9.sp,
+                    text = tagLabel, color = if (isRelative) Color.White else accentColor, fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(accentColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = colors.divider.copy(alpha = 0.5f), thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Outlined.DeviceHub, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(13.dp))
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(text = "FROM: $senderDisplayName", color = colors.textPrimary, fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Outlined.AccessTime, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(13.dp))
-                Spacer(modifier = Modifier.width(5.dp))
-                val timeLabel = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(alert.timestamp)
-                Text(
-                    text = if (sectionType == SosType.LOCAL_MESH) "${alert.hopCount} hops  •  $timeLabel" else timeLabel,
-                    color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace
+                    modifier = Modifier.background(if (isRelative) colors.accentRed else accentColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 4.dp)
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = colors.surfaceNested), shape = RoundedCornerShape(8.dp)) {
+            HorizontalDivider(color = if (isRelative) colors.accentRed.copy(alpha = 0.3f) else colors.divider.copy(alpha = 0.5f), thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Outlined.DeviceHub, contentDescription = null, tint = if (isRelative) colors.accentRed.copy(alpha = 0.8f) else colors.textSecondary, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "FROM: $senderDisplayName", color = colors.textPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Outlined.AccessTime, contentDescription = null, tint = if (isRelative) colors.accentRed.copy(alpha = 0.8f) else colors.textSecondary, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                val timeLabel = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(alert.timestamp)
+                Text(
+                    text = if (sectionType == SosType.LOCAL_MESH) "${alert.hopCount} hops  •  $timeLabel" else timeLabel,
+                    color = colors.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = if (isRelative) colors.cardBackground else colors.surfaceNested),
+                shape = RoundedCornerShape(8.dp),
+                border = if (isRelative) BorderStroke(1.dp, colors.accentRed.copy(alpha = 0.2f)) else null
+            ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "$category EMERGENCY", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
@@ -449,7 +496,7 @@ private fun SosAlertCard(
                     }
                     if (message.isNotBlank() && message != "Emergency SOS triggered") {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "\"$message\"", color = colors.textPrimary, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                        Text(text = "\"$message\"", color = colors.textPrimary, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, fontWeight = if (isRelative) FontWeight.Medium else FontWeight.Normal)
                     }
                     if (sosCoords != null) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -461,35 +508,35 @@ private fun SosAlertCard(
                 }
             }
             if (sosCoords != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = { onTrackSos?.invoke(sosCoords.first, sosCoords.second, senderDisplayName, category, alert.timestamp) },
-                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E3A8A)),
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(1.dp, Color(0xFF3B82F6)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Icon(imageVector = Icons.Outlined.Navigation, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "TRACK LOCATION", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Icon(imageVector = Icons.Outlined.Navigation, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "TRACK LOCATION", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
             }
             if (sectionType != SosType.MINE) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Button(
                     onClick = onAcknowledgeClick,
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(alpha = 0.15f)),
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isRelative) colors.cardBackground else accentColor.copy(alpha = 0.15f)),
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f)),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null, tint = accentColor, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (sectionType == SosType.RELATIVE) "CONFIRM PERSON SAFE" else "CONFIRM AREA SAFE",
-                        color = accentColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
+                        color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
                     )
                 }
             }
@@ -545,10 +592,9 @@ private fun AcknowledgedAlertRow(
     }
 }
 
-
-
+// Clean bold TopBar matching the reference image's typography style
 @Composable
-private fun EmergencyTopBar(onBackClick: () -> Unit = {}) {
+private fun EmergencyTopBar() {
     val colors = ZeroGridTheme.colors
     Column(
         modifier = Modifier
@@ -563,31 +609,13 @@ private fun EmergencyTopBar(onBackClick: () -> Unit = {}) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Emergency Center",
-                    color = colors.primary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Icon(
-                imageVector = Icons.Outlined.History,
-                contentDescription = "History",
-                tint = colors.primary,
-                modifier = Modifier.size(24.dp)
+            Text(
+                text = "Emergency Center",
+                color = colors.textPrimary,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
             )
         }
-        HorizontalDivider(color = colors.divider, thickness = 1.dp)
     }
 }
 
@@ -621,34 +649,60 @@ private fun MeshStatusBanner(reachableCount: Int) {
 }
 
 @Composable
-private fun EmergencySosCard(onSendSosClick: () -> Unit = {}) {
+private fun EmergencySosStickyButton(onSendSosClick: () -> Unit = {}) {
+    val colors = ZeroGridTheme.colors
+    Button(
+        onClick = onSendSosClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = colors.accentRed),
+        shape = RoundedCornerShape(12.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.Outlined.Campaign, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "SEND SOS",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmergencySosInfoCard() {
     val colors = ZeroGridTheme.colors
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, colors.accentRed.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+            .border(1.dp, colors.accentRed.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .background(colors.accentRed.copy(alpha = 0.15f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = Icons.Outlined.Warning, contentDescription = null, tint = colors.accentRed, modifier = Modifier.size(28.dp))
+                Icon(imageVector = Icons.Outlined.Warning, contentDescription = null, tint = colors.accentRed, modifier = Modifier.size(24.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Emergency SOS",
+                text = "Emergency Dispatch",
                 color = colors.textPrimary,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -658,28 +712,7 @@ private fun EmergencySosCard(onSendSosClick: () -> Unit = {}) {
                 fontSize = 13.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = onSendSosClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = colors.accentRed),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Outlined.Campaign, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "SEND SOS",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Your SOS will be relayed across the local mesh. Use only for genuine emergencies.",
                 color = colors.textSecondary,
@@ -690,271 +723,6 @@ private fun EmergencySosCard(onSendSosClick: () -> Unit = {}) {
         }
     }
 }
-
-@Composable
-private fun ActiveAlertsSection(
-    alerts: List<MeshPacket>,
-    localNodeId: String,
-    acknowledgedIds: Set<String>,
-    onAcknowledge: (String) -> Unit,
-    onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
-) {
-    val colors = ZeroGridTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (alerts.isEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = colors.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "No active emergency alerts", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "All clear on the mesh network.", color = colors.textSecondary, fontSize = 12.sp)
-                    }
-                }
-            }
-        } else {
-            alerts.forEach { alert ->
-                val isMine = alert.senderId == localNodeId
-                val isAcknowledged = alert.packetId in acknowledgedIds
-
-                val borderColor = when {
-                    isAcknowledged -> colors.divider
-                    isMine -> colors.primary
-                    else -> colors.accentRed
-                }
-                val tagText = when {
-                    isAcknowledged -> "ACKNOWLEDGED"
-                    isMine -> "SENT BY ME"
-                    else -> "INCOMING"
-                }
-                val tagColor = when {
-                    isAcknowledged -> colors.textSecondary
-                    isMine -> colors.primary
-                    else -> colors.accentRed
-                }
-                val tagBg = when {
-                    isAcknowledged -> colors.surfaceNested
-                    isMine -> colors.primary.copy(alpha = 0.15f)
-                    else -> colors.accentRed.copy(alpha = 0.15f)
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, borderColor.copy(alpha = if (isAcknowledged) 0.3f else 0.8f), RoundedCornerShape(12.dp)),
-                    colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(tagColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isMine) "My Emergency Beacon" else "Remote Emergency Alert",
-                                    color = if (isAcknowledged) colors.textSecondary else colors.textPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Text(
-                                text = tagText,
-                                color = tagColor,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .background(tagBg, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(color = colors.divider.copy(alpha = 0.5f), thickness = 0.5.dp)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Sender row
-                        val parsedSenderName = alert.getSosSenderName()
-                        val senderDisplayName = when {
-                            isMine -> "You"
-                            !parsedSenderName.isNullOrBlank() -> parsedSenderName
-                            else -> "Node-${alert.senderId.takeLast(4)}"
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Outlined.DeviceHub, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isMine) "FROM: $senderDisplayName (${alert.senderId})" else "FROM: $senderDisplayName",
-                                color = if (isMine) colors.primary else colors.textPrimary,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Hop + time row
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Outlined.Hub, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "${alert.hopCount} hops  •  TTL: ${alert.ttl}  •  ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(alert.timestamp)}",
-                                color = colors.textSecondary,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Clean Parsed Payload Card (Never raw JSON)
-                        val category = alert.getSosCategory()
-                        val message = alert.getSosMessage()
-                        val sosCoords = alert.getSosCoordinates()
-                        val accuracy = alert.getSosAccuracy()
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = colors.surfaceNested),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "$category EMERGENCY",
-                                        color = colors.accentRed,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                    if (sosCoords != null) {
-                                        Text(
-                                            text = "GPS LOCK ✓",
-                                            color = Color(0xFF10B981),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                }
-                                if (message.isNotBlank() && message != "Emergency SOS triggered") {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "\"$message\"",
-                                        color = colors.textPrimary,
-                                        fontSize = 13.sp,
-                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                    )
-                                }
-                                if (sosCoords != null) {
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = "Location: ${String.format(java.util.Locale.US, "%.5f", sosCoords.first)}, ${String.format(java.util.Locale.US, "%.5f", sosCoords.second)}${if (accuracy != null) " (±${accuracy.toInt()}m)" else ""}",
-                                        color = colors.textSecondary,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-
-                        // TRACK LOCATION button — shown whenever valid GPS coords exist
-                        if (sosCoords != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = {
-                                    onTrackSos?.invoke(
-                                        sosCoords.first,
-                                        sosCoords.second,
-                                        senderDisplayName,
-                                        category,
-                                        alert.timestamp
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth().height(38.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1E3A8A)
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFF3B82F6)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Navigation,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isMine) "TEST COMPASS POINTER (THIS DEVICE)" else "TRACK LOCATION",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-
-                        if (!isMine && !isAcknowledged) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { onAcknowledge(alert.packetId) },
-                                modifier = Modifier.fillMaxWidth().height(36.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary.copy(alpha = 0.15f)),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.5f)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                            ) {
-                                Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null, tint = colors.primary, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "ACKNOWLEDGE ALERT",
-                                    color = colors.primary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        } else if (isMine && !isAcknowledged) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Broadcasting on mesh — other nodes will be alerted",
-                                color = colors.primary.copy(alpha = 0.7f),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 
 @Composable
 private fun NetworkReachSection(
@@ -1025,177 +793,6 @@ private fun NetworkReachSection(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun RecentActivitySection(
-    alerts: List<MeshPacket>,
-    acknowledgedIds: Set<String>,
-    localNodeId: String = "",
-    onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
-) {
-    val colors = ZeroGridTheme.colors
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        if (alerts.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Outlined.CheckCircle,
-                        contentDescription = null,
-                        tint = colors.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "No emergency alerts recorded",
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Mesh network operating in normal state",
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-        } else {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                alerts.take(10).forEach { alert ->
-                    val isAck = alert.packetId in acknowledgedIds
-                    val formattedTime = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-                        .format(java.util.Date(alert.timestamp))
-                    val category = alert.getSosCategory()
-                    val message = alert.getSosMessage()
-                    val isMine = alert.senderId == localNodeId
-                    val rawSender = alert.getSosSenderName()
-                    val senderName = when {
-                        isMine -> "You"
-                        !rawSender.isNullOrBlank() -> rawSender
-                        else -> "Node-${alert.senderId.takeLast(4)}"
-                    }
-                    val coords = alert.getSosCoordinates()
-
-                    val title = if (isAck) "SOS Acknowledged: $category ($senderName)" else "$category Alert • $senderName"
-                    val subtitle = if (message.isNotBlank() && message != "Emergency SOS triggered") "\"$message\" • $formattedTime" else formattedTime
-
-                    RecentActivityItem(
-                        icon = if (isAck) Icons.Outlined.Shield else Icons.Outlined.Emergency,
-                        iconTint = if (isAck) colors.primary else colors.accentRed,
-                        title = title,
-                        subtitle = subtitle,
-                        hasCoords = coords != null,
-                        onTrackClick = if (coords != null) {
-                            { onTrackSos?.invoke(coords.first, coords.second, senderName, category, alert.timestamp) }
-                        } else null
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentActivityItem(
-    icon: ImageVector,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    hasCoords: Boolean = false,
-    onTrackClick: (() -> Unit)? = null
-) {
-    val colors = ZeroGridTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onTrackClick != null) Modifier.clickable { onTrackClick() } else Modifier),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .background(colors.surfaceNested, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(16.dp))
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = subtitle, color = colors.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-        }
-        if (hasCoords && onTrackClick != null) {
-            Spacer(modifier = Modifier.width(8.dp))
-            OutlinedButton(
-                onClick = onTrackClick,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, Color(0xFF3B82F6)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF60A5FA)
-                ),
-                modifier = Modifier.height(28.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Navigation,
-                    contentDescription = null,
-                    modifier = Modifier.size(11.dp)
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-                Text("TRACK", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickActionButton(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit = {}
-) {
-    val colors = ZeroGridTheme.colors
-    Card(
-        onClick = onClick,
-        modifier = modifier.height(80.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.divider)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                color = colors.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                lineHeight = 16.sp,
-                fontFamily = FontFamily.Monospace
-            )
         }
     }
 }

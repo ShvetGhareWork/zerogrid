@@ -1,14 +1,14 @@
 package com.example.zerogrid.emergency
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -33,6 +33,7 @@ import com.example.zerogrid.navigation.Screen
 import com.example.zerogrid.ui.theme.*
 import kotlinx.coroutines.launch
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     val context = LocalContext.current
@@ -48,6 +49,7 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     var gpsAccuracy by remember { mutableStateOf<Float?>(null) }
     var gpsFetching by remember { mutableStateOf(false) }
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
+    val colors = ZeroGridTheme.colors
 
     // Eagerly fetch GPS when location sharing is enabled
     LaunchedEffect(locationSharingEnabled) {
@@ -64,207 +66,217 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     }
 
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = colors.background,
         topBar = { SendSosTopBar(onBackClick = { onNavigate(Screen.HOME) }) }
     ) { paddingValues ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
-            EmergencyBroadcastWarningCard()
-            Spacer(modifier = Modifier.height(20.dp))
+            val isTablet = maxWidth >= 600.dp
+            val horizontalPadding = if (isTablet) 32.dp else 16.dp
 
-            // Emergency Type Section
-            Text(
-                text = "EMERGENCY TYPE",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            EmergencyTypeChipsRow(selected = selectedType, onSelected = { selectedType = it })
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Emergency Message Input Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "EMERGENCY MESSAGE",
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${emergencyMessage.length} / 500",
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            EmergencyMessageInput(
-                value = emergencyMessage,
-                onValueChange = { if (it.length <= 500) emergencyMessage = it }
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Location Sharing Card with live GPS status
-            LocationSharingCard(
-                checked = locationSharingEnabled,
-                onCheckedChange = { locationSharingEnabled = it },
-                lat = gpsLat,
-                lng = gpsLng,
-                accuracy = gpsAccuracy,
-                isFetching = gpsFetching
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Estimated Mesh Reach Section
-            Text(
-                text = "ESTIMATED MESH REACH",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            EstimatedMeshReachSection()
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Attach Information Section
-            Text(
-                text = "ATTACH INFORMATION",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                AttachButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.PhotoCamera,
-                    label = "Photo"
-                )
-                AttachButton(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Folder,
-                    label = "File"
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Optional. Keep attachments small for faster emergency delivery.",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                lineHeight = 16.sp
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Emergency Transport Section
-            Text(
-                text = "EMERGENCY CHANNEL",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ActiveSosChannelCard(
-                activeMode = activeChannelMode,
-                onSwitchMode = {
-                    val newMode = if (activeChannelMode == com.example.zerogrid.mesh.engine.MeshChannelMode.BLE) {
-                        com.example.zerogrid.mesh.engine.MeshChannelMode.WIFI_DIRECT
-                    } else {
-                        com.example.zerogrid.mesh.engine.MeshChannelMode.BLE
-                    }
-                    meshEngine.setMeshChannelMode(newMode)
-                }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Broadcast SOS Action Button
-            Button(
-                onClick = {
-                    coroutineScope.launch {
-                        // Acquire fresh GPS right before dispatch so coords are up-to-date
-                        val (lat, lng, accuracy) = if (locationSharingEnabled) {
-                            val r = LocationHelper.getCurrentLocation(context)
-                            Triple(r?.lat, r?.lng, r?.accuracy)
-                        } else {
-                            Triple(null, null, null)
-                        }
-                        sosDispatcher.triggerSos(
-                            lat = lat,
-                            lng = lng,
-                            accuracy = accuracy,
-                            category = selectedType,
-                            message = emergencyMessage
-                        )
-                    }
-                    onNavigate(Screen.SOS_CENTER)
-                },
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AlertPink),
-                shape = RoundedCornerShape(16.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = horizontalPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "SOS",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "BROADCAST SOS",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            EmergencyBroadcastWarningCard()
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Emergency Type Section
+                            Text(
+                                text = "EMERGENCY TYPE",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            EmergencyTypeChipsRow(selected = selectedType, onSelected = { selectedType = it })
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Emergency Message Input Section
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "EMERGENCY MESSAGE",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${emergencyMessage.length} / 500",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            EmergencyMessageInput(
+                                value = emergencyMessage,
+                                onValueChange = { if (it.length <= 500) emergencyMessage = it }
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Location Sharing Card with live GPS status
+                            LocationSharingCard(
+                                checked = locationSharingEnabled,
+                                onCheckedChange = { locationSharingEnabled = it },
+                                lat = gpsLat,
+                                lng = gpsLng,
+                                accuracy = gpsAccuracy,
+                                isFetching = gpsFetching
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Estimated Mesh Reach Section
+                            Text(
+                                text = "ESTIMATED MESH REACH",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            EstimatedMeshReachSection()
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Attach Information Section (Photo Only)
+                            Text(
+                                text = "ATTACH INFORMATION",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            AttachButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                icon = Icons.Outlined.PhotoCamera,
+                                label = "Attach Photo"
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Optional. Keep attachments small for faster emergency delivery.",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Emergency Transport Section
+                            Text(
+                                text = "EMERGENCY CHANNEL",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            ActiveSosChannelCard(
+                                activeMode = activeChannelMode,
+                                onSwitchMode = {
+                                    val newMode = if (activeChannelMode == com.example.zerogrid.mesh.engine.MeshChannelMode.BLE) {
+                                        com.example.zerogrid.mesh.engine.MeshChannelMode.WIFI_DIRECT
+                                    } else {
+                                        com.example.zerogrid.mesh.engine.MeshChannelMode.BLE
+                                    }
+                                    meshEngine.setMeshChannelMode(newMode)
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            // Broadcast SOS Action Button
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        // Acquire fresh GPS right before dispatch so coords are up-to-date
+                                        val (lat, lng, accuracy) = if (locationSharingEnabled) {
+                                            val r = LocationHelper.getCurrentLocation(context)
+                                            Triple(r?.lat, r?.lng, r?.accuracy)
+                                        } else {
+                                            Triple(null, null, null)
+                                        }
+                                        sosDispatcher.triggerSos(
+                                            lat = lat,
+                                            lng = lng,
+                                            accuracy = accuracy,
+                                            category = selectedType,
+                                            message = emergencyMessage
+                                        )
+                                    }
+                                    onNavigate(Screen.SOS_CENTER)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.accentRed),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "SOS",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "BROADCAST SOS",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Footer Status
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Encrypted  •  Local Mesh  •  Multi-Hop",
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Footer Status
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Encrypted  •  Local Mesh  •  Multi-Hop",
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
 @Composable
 private fun SendSosTopBar(onBackClick: () -> Unit = {}) {
+    val colors = ZeroGridTheme.colors
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(DarkBackground)
+            .background(colors.background)
             .statusBarsPadding()
     ) {
         Row(
@@ -279,22 +291,22 @@ private fun SendSosTopBar(onBackClick: () -> Unit = {}) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = StatusActive,
+                        tint = BadgeGreen,
                         modifier = Modifier.size(24.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Send SOS",
-                    color = StatusActive,
+                    color = colors.textPrimary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
             Surface(
-                color = SurfaceDarker,
+                color = colors.surfaceNested,
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, DividerColor)
+                border = BorderStroke(1.dp, colors.divider)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -303,13 +315,13 @@ private fun SendSosTopBar(onBackClick: () -> Unit = {}) {
                     Icon(
                         imageVector = Icons.Outlined.Lock,
                         contentDescription = null,
-                        tint = StatusActive,
+                        tint = BadgeGreen,
                         modifier = Modifier.size(12.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "ENCRYPTED",
-                        color = StatusActive,
+                        color = BadgeGreen,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
@@ -317,17 +329,18 @@ private fun SendSosTopBar(onBackClick: () -> Unit = {}) {
                 }
             }
         }
-        HorizontalDivider(color = DividerColor, thickness = 1.dp)
+        HorizontalDivider(color = colors.divider, thickness = 1.dp)
     }
 }
 
 @Composable
 private fun EmergencyBroadcastWarningCard() {
+    val colors = ZeroGridTheme.colors
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, AlertRedBorder, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+            .border(1.dp, colors.accentRed.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -337,14 +350,14 @@ private fun EmergencyBroadcastWarningCard() {
             Icon(
                 imageVector = Icons.Outlined.Warning,
                 contentDescription = null,
-                tint = AlertPink,
+                tint = colors.accentRed,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
                     text = "Emergency Broadcast",
-                    color = AlertPink,
+                    color = colors.accentRed,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
@@ -352,7 +365,7 @@ private fun EmergencyBroadcastWarningCard() {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "This message will be broadcast to reachable ZeroGrid devices and may be relayed across the mesh.",
-                    color = TextSecondary,
+                    color = colors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 18.sp
                 )
@@ -361,13 +374,13 @@ private fun EmergencyBroadcastWarningCard() {
                     Icon(
                         imageVector = Icons.Outlined.WifiOff,
                         contentDescription = null,
-                        tint = TextSecondary,
+                        tint = colors.textSecondary,
                         modifier = Modifier.size(12.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "No internet connection required.",
-                        color = TextSecondary,
+                        color = colors.textSecondary,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
@@ -379,6 +392,7 @@ private fun EmergencyBroadcastWarningCard() {
 
 @Composable
 private fun EmergencyTypeChipsRow(selected: String, onSelected: (String) -> Unit) {
+    val colors = ZeroGridTheme.colors
     val types = listOf("Medical", "Trapped", "Fire", "Missing")
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -392,11 +406,11 @@ private fun EmergencyTypeChipsRow(selected: String, onSelected: (String) -> Unit
                     .height(40.dp)
                     .weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isSelected) StatusActive else CardBackground,
-                    contentColor = if (isSelected) Color.Black else TextSecondary
+                    containerColor = if (isSelected) colors.primary else colors.cardBackground,
+                    contentColor = if (isSelected) (if (colors.isDark) Color.Black else Color.White) else colors.textSecondary
                 ),
                 shape = RoundedCornerShape(20.dp),
-                border = if (!isSelected) BorderStroke(1.dp, DividerColor) else null,
+                border = if (!isSelected) BorderStroke(1.dp, colors.divider) else null,
                 contentPadding = PaddingValues(0.dp)
             ) {
                 Text(
@@ -411,13 +425,14 @@ private fun EmergencyTypeChipsRow(selected: String, onSelected: (String) -> Unit
 
 @Composable
 private fun EmergencyMessageInput(value: String, onValueChange: (String) -> Unit) {
+    val colors = ZeroGridTheme.colors
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = {
             Text(
                 text = "Describe the emergency and what assistance is needed...",
-                color = TextSecondary,
+                color = colors.textSecondary,
                 fontSize = 14.sp
             )
         },
@@ -426,13 +441,13 @@ private fun EmergencyMessageInput(value: String, onValueChange: (String) -> Unit
             .height(130.dp),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = CardBackground,
-            unfocusedContainerColor = CardBackground,
-            disabledContainerColor = CardBackground,
-            focusedBorderColor = DividerColor,
-            unfocusedBorderColor = DividerColor,
-            focusedTextColor = TextPrimary,
-            unfocusedTextColor = TextPrimary
+            focusedContainerColor = colors.cardBackground,
+            unfocusedContainerColor = colors.cardBackground,
+            disabledContainerColor = colors.cardBackground,
+            focusedBorderColor = colors.primary,
+            unfocusedBorderColor = colors.divider,
+            focusedTextColor = colors.textPrimary,
+            unfocusedTextColor = colors.textPrimary
         )
     )
 }
@@ -446,11 +461,12 @@ private fun LocationSharingCard(
     accuracy: Float? = null,
     isFetching: Boolean = false
 ) {
+    val colors = ZeroGridTheme.colors
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, DividerColor)
+        border = BorderStroke(1.dp, colors.divider)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -462,14 +478,14 @@ private fun LocationSharingCard(
                     Icon(
                         imageVector = Icons.Outlined.LocationOn,
                         contentDescription = null,
-                        tint = if (checked && lat != null) StatusActive else TextSecondary,
+                        tint = if (checked && lat != null) BadgeGreen else colors.textSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = "Location sharing",
-                            color = TextPrimary,
+                            color = colors.textPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -477,13 +493,13 @@ private fun LocationSharingCard(
                         when {
                             !checked -> Text(
                                 text = "Disabled — will not share location",
-                                color = TextSecondary,
+                                color = colors.textSecondary,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                             isFetching -> Text(
                                 text = "Acquiring GPS fix...",
-                                color = AlertYellow,
+                                color = Color(0xFFFBBF24),
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -492,14 +508,14 @@ private fun LocationSharingCard(
                                     lat, lng,
                                     if (accuracy != null) "(±${accuracy.toInt()}m)" else ""
                                 ),
-                                color = StatusActive,
+                                color = BadgeGreen,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Medium
                             )
                             else -> Text(
                                 text = "GPS unavailable — will retry on send",
-                                color = AlertPink,
+                                color = colors.accentRed,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -510,10 +526,10 @@ private fun LocationSharingCard(
                     checked = checked,
                     onCheckedChange = onCheckedChange,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = StatusActive,
-                        uncheckedThumbColor = TextSecondary,
-                        uncheckedTrackColor = SurfaceDarker,
+                        checkedThumbColor = if (colors.isDark) Color.Black else Color.White,
+                        checkedTrackColor = BadgeGreen,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.surfaceNested,
                         uncheckedBorderColor = Color.Transparent
                     )
                 )
@@ -521,7 +537,7 @@ private fun LocationSharingCard(
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Share your current location with this SOS. Location will be included only with this emergency broadcast.",
-                color = TextSecondary,
+                color = colors.textSecondary,
                 fontSize = 12.sp,
                 lineHeight = 18.sp
             )
@@ -531,13 +547,13 @@ private fun LocationSharingCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = SurfaceDarker),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceNested),
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, DividerColor)
+                border = BorderStroke(1.dp, colors.divider)
             ) {
                 Text(
                     text = "Use approximate location",
-                    color = StatusActive,
+                    color = colors.primary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
@@ -549,11 +565,12 @@ private fun LocationSharingCard(
 
 @Composable
 private fun EstimatedMeshReachSection() {
+    val colors = ZeroGridTheme.colors
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, DividerColor)
+        border = BorderStroke(1.dp, colors.divider)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -562,11 +579,11 @@ private fun EstimatedMeshReachSection() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(6.dp).background(StatusActive, CircleShape))
+                    Box(modifier = Modifier.size(6.dp).background(BadgeGreen, CircleShape))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "MESH ACTIVE",
-                        color = StatusActive,
+                        color = BadgeGreen,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
@@ -581,20 +598,20 @@ private fun EstimatedMeshReachSection() {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .background(SurfaceDarker, RoundedCornerShape(8.dp))
+                        .background(colors.surfaceNested, RoundedCornerShape(8.dp))
                         .padding(12.dp)
                 ) {
                     Column {
                         Text(
                             text = "Nearby devices",
-                            color = TextSecondary,
+                            color = colors.textSecondary,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "12",
-                            color = TextPrimary,
+                            color = colors.textPrimary,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -604,20 +621,20 @@ private fun EstimatedMeshReachSection() {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .background(SurfaceDarker, RoundedCornerShape(8.dp))
+                        .background(colors.surfaceNested, RoundedCornerShape(8.dp))
                         .padding(12.dp)
                 ) {
                     Column {
                         Text(
                             text = "Est. relay hops",
-                            color = TextSecondary,
+                            color = colors.textSecondary,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Up to 8",
-                            color = TextPrimary,
+                            color = colors.textPrimary,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -630,13 +647,13 @@ private fun EstimatedMeshReachSection() {
                 Icon(
                     imageVector = Icons.Outlined.Hub,
                     contentDescription = null,
-                    tint = StatusActive,
+                    tint = BadgeGreen,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Multiple connected devices",
-                    color = StatusActive,
+                    color = BadgeGreen,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium
@@ -648,11 +665,12 @@ private fun EstimatedMeshReachSection() {
 
 @Composable
 private fun AttachButton(modifier: Modifier = Modifier, icon: ImageVector, label: String) {
+    val colors = ZeroGridTheme.colors
     Card(
         modifier = modifier.height(60.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, DividerColor)
+        border = BorderStroke(1.dp, colors.divider)
     ) {
         Row(
             modifier = Modifier
@@ -661,11 +679,11 @@ private fun AttachButton(modifier: Modifier = Modifier, icon: ImageVector, label
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = StatusActive, modifier = Modifier.size(20.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = label,
-                color = TextPrimary,
+                color = colors.textPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -678,15 +696,16 @@ private fun ActiveSosChannelCard(
     activeMode: com.example.zerogrid.mesh.engine.MeshChannelMode,
     onSwitchMode: () -> Unit
 ) {
+    val colors = ZeroGridTheme.colors
     val isBle = activeMode == com.example.zerogrid.mesh.engine.MeshChannelMode.BLE
     val channelIcon = if (isBle) Icons.Outlined.Bluetooth else Icons.Outlined.Wifi
     val nextModeName = if (isBle) "Wi-Fi Direct" else "BLE"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, DividerColor)
+        border = BorderStroke(1.dp, colors.divider)
     ) {
         Row(
             modifier = Modifier
@@ -699,23 +718,23 @@ private fun ActiveSosChannelCard(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .background(SurfaceDarker, CircleShape),
+                        .background(colors.surfaceNested, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(channelIcon, null, tint = StatusActive, modifier = Modifier.size(22.dp))
+                    Icon(channelIcon, null, tint = colors.primary, modifier = Modifier.size(22.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = activeMode.displayName,
-                        color = TextPrimary,
+                        color = colors.textPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
                         text = "Exclusively broadcasting across this radio",
-                        color = TextSecondary,
+                        color = colors.textSecondary,
                         fontSize = 11.sp
                     )
                 }
@@ -723,10 +742,10 @@ private fun ActiveSosChannelCard(
             OutlinedButton(
                 onClick = onSwitchMode,
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, StatusActive.copy(alpha = 0.6f)),
+                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.6f)),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text("Switch to $nextModeName", color = StatusActive, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Switch to $nextModeName", color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

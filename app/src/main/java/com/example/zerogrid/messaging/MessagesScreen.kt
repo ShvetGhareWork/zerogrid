@@ -75,7 +75,7 @@ fun MessagesScreen(
     val filteredPeers = remember(connectedPeers, activeChannelMode, localNodeId, localDisplayName) {
         connectedPeers.filter { node ->
             node.transportType == activeChannelMode.transportName &&
-            !node.nodeId.equals(localNodeId, ignoreCase = true) &&
+                    !node.nodeId.equals(localNodeId, ignoreCase = true) &&
                     !node.nodeId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true) &&
                     !node.alias.equals(localDisplayName, ignoreCase = true) &&
                     !node.alias.equals(android.os.Build.MODEL, ignoreCase = true)
@@ -136,13 +136,6 @@ fun MessagesScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = {
-            ZeroGridTopBar(
-                peerCount = connectedPeers.size,
-                isMeshActive = isMeshActive,
-                onProfileClick = { onNavigate(Screen.PROFILE) }
-            )
-        }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -205,22 +198,6 @@ fun MessagesScreen(
                                                 fontFamily = FontFamily.Monospace
                                             )
                                         }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    IconButton(
-                                        onClick = { showClearConfirmDialog = true },
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .background(colors.surfaceNested, CircleShape)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteSweep,
-                                            contentDescription = "Clear Session Chats",
-                                            tint = colors.textSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
                                     }
                                 }
                             }
@@ -366,20 +343,30 @@ fun MessagesScreen(
                                     fontFamily = FontFamily.Monospace,
                                     letterSpacing = 1.sp
                                 )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Sort,
-                                        contentDescription = null,
-                                        tint = colors.textSecondary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Activity",
-                                        color = colors.textSecondary,
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
+
+                                // Replaced "Activity" with the "Clear All" action, visible only on the Chats tab
+                                if (selectedTab == 0) {
+                                    Row(
+                                        modifier = Modifier
+                                            .clickable { showClearConfirmDialog = true }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DeleteSweep,
+                                            contentDescription = "Clear Session Chats",
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Clear All",
+                                            color = colors.textSecondary,
+                                            fontSize = 12.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
 
@@ -474,33 +461,6 @@ fun MessagesScreen(
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Button(
-                            onClick = {
-                                filteredPeers.firstOrNull()?.let { onOpenPeerChat?.invoke(it.nodeId) }
-                                    ?: onNavigate(Screen.MESH)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primary,
-                                contentColor = if (colors.isDark) Color.Black else Color.White
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ChatBubbleOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Start Chat",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 }
