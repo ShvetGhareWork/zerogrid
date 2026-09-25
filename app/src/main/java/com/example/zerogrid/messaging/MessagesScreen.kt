@@ -1,5 +1,9 @@
 package com.example.zerogrid.messaging
 
+import android.annotation.SuppressLint
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,26 +12,30 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
-
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.mesh.engine.MeshNode
 import com.example.zerogrid.navigation.Screen
-import com.example.zerogrid.navigation.ZeroGridBottomBar
+import com.example.zerogrid.ui.components.ZeroGridTopBar
 import com.example.zerogrid.ui.theme.BadgeGreen
 import com.example.zerogrid.ui.theme.ZeroGridTheme
 import java.text.SimpleDateFormat
@@ -45,6 +53,7 @@ data class ChatSummaryUiModel(
     val unreadCount: Int
 )
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MessagesScreen(
     onNavigate: (Screen) -> Unit = {},
@@ -67,17 +76,16 @@ fun MessagesScreen(
         connectedPeers.filter { node ->
             node.transportType == activeChannelMode.transportName &&
             !node.nodeId.equals(localNodeId, ignoreCase = true) &&
-            !node.nodeId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true) &&
-            !node.alias.equals(localDisplayName, ignoreCase = true) &&
-            !node.alias.equals(android.os.Build.MODEL, ignoreCase = true)
+                    !node.nodeId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true) &&
+                    !node.alias.equals(localDisplayName, ignoreCase = true) &&
+                    !node.alias.equals(android.os.Build.MODEL, ignoreCase = true)
         }.distinctBy { it.nodeId }
     }
 
-    // Ephemeral session: Peers that have active messages in this session or are currently connected
     val allChatPeerIds = remember(conversations, filteredPeers) {
         val fromConversations = conversations.filter { it.value.isNotEmpty() }.keys.filter { peerId ->
             !peerId.equals(localNodeId, ignoreCase = true) &&
-            !peerId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true)
+                    !peerId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true)
         }
         val fromConnected = filteredPeers.map { it.nodeId }
         (fromConversations + fromConnected).distinct()
@@ -87,10 +95,8 @@ fun MessagesScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
 
-    // Fast O(1) peer lookup map to eliminate linear searches during list building
     val peerMap = remember(filteredPeers) { filteredPeers.associateBy { it.nodeId } }
 
-    // Precomputed immutable UI model list, dynamically sorted off the main thread
     val displayChats by produceState(
         initialValue = emptyList<ChatSummaryUiModel>(),
         allChatPeerIds, searchQuery, conversations, peerMap
@@ -129,7 +135,14 @@ fun MessagesScreen(
     }
 
     Scaffold(
-        containerColor = Color.Transparent, // Overdraw elimination: let root Scaffold own background
+        containerColor = Color.Transparent,
+        topBar = {
+            ZeroGridTopBar(
+                peerCount = connectedPeers.size,
+                isMeshActive = isMeshActive,
+                onProfileClick = { onNavigate(Screen.PROFILE) }
+            )
+        }
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -153,7 +166,7 @@ fun MessagesScreen(
                             .fillMaxWidth()
                     ) {
                         Column {
-                            // Screen Header: Title + Subtitle + Mesh Active Pill + Clear Action
+                            // Screen Header
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -167,11 +180,6 @@ fun MessagesScreen(
                                         color = colors.textPrimary
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Ephemeral Mesh Chat",
-                                        fontSize = 13.sp,
-                                        color = colors.textSecondary
-                                    )
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,17 +264,19 @@ fun MessagesScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Search Bar
+                            // 1. Slim, Responsive Search Bar (BasicTextField)
                             Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth() // Fully responsive
+                                    .height(44.dp), // Slim height
+                                shape = RoundedCornerShape(12.dp),
                                 color = colors.cardBackground,
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
                             ) {
                                 Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .fillMaxSize()
+                                        .padding(horizontal = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -276,26 +286,28 @@ fun MessagesScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    OutlinedTextField(
+                                    BasicTextField(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
-                                        placeholder = {
-                                            Text(
-                                                text = "Search chats or channels...",
-                                                color = colors.textSecondary,
-                                                fontSize = 14.sp
-                                            )
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color.Transparent,
-                                            unfocusedBorderColor = Color.Transparent,
-                                            focusedContainerColor = Color.Transparent,
-                                            unfocusedContainerColor = Color.Transparent,
-                                            focusedTextColor = colors.textPrimary,
-                                            unfocusedTextColor = colors.textPrimary
+                                        textStyle = TextStyle(
+                                            color = colors.textPrimary,
+                                            fontSize = 14.sp
                                         ),
-                                        singleLine = true
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f),
+                                        decorationBox = { innerTextField ->
+                                            Box(contentAlignment = Alignment.CenterStart) {
+                                                if (searchQuery.isEmpty()) {
+                                                    Text(
+                                                        text = "Search chats or channels...",
+                                                        color = colors.textSecondary,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                                innerTextField()
+                                            }
+                                        },
+                                        cursorBrush = SolidColor(colors.primary)
                                     )
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(
@@ -313,9 +325,9 @@ fun MessagesScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                            // Segmented Tab Selector: Direct Chats vs Channels
+                            // Segmented Tab Selector
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -376,74 +388,84 @@ fun MessagesScreen(
                     }
                 }
 
-                if (selectedTab == 0) {
-                    // Direct Chats List
-                    if (displayChats.isEmpty()) {
-                        item(key = "empty_messages") {
-                            Box(
-                                modifier = Modifier
-                                    .widthIn(max = 840.dp)
-                                    .fillMaxWidth()
-                            ) {
-                                EmptyMessagesCard(
-                                    hasConnectedPeers = filteredPeers.isNotEmpty(),
-                                    onStartChat = {
-                                        filteredPeers.firstOrNull()?.let { onOpenPeerChat?.invoke(it.nodeId) }
-                                            ?: onNavigate(Screen.MESH)
+                // 2. Smooth Animated Transition
+                item {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = 840.dp)
+                            .fillMaxWidth()
+                    ) {
+                        AnimatedContent(
+                            targetState = selectedTab,
+                            transitionSpec = {
+                                val animSpec = tween<IntOffset>(durationMillis = 350, easing = FastOutSlowInEasing)
+                                val fadeSpec = tween<Float>(durationMillis = 250)
+                                if (targetState > initialState) {
+                                    (slideInHorizontally(animSpec) { width -> width } + fadeIn(fadeSpec)).togetherWith(
+                                        slideOutHorizontally(animSpec) { width -> -width } + fadeOut(fadeSpec)
+                                    )
+                                } else {
+                                    (slideInHorizontally(animSpec) { width -> -width } + fadeIn(fadeSpec)).togetherWith(
+                                        slideOutHorizontally(animSpec) { width -> width } + fadeOut(fadeSpec)
+                                    )
+                                }
+                            },
+                            label = "tab_transition"
+                        ) { tab ->
+                            if (tab == 0) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (displayChats.isEmpty()) {
+                                        EmptyMessagesCard(
+                                            hasConnectedPeers = filteredPeers.isNotEmpty(),
+                                            onStartChat = {
+                                                filteredPeers.firstOrNull()?.let { onOpenPeerChat?.invoke(it.nodeId) }
+                                                    ?: onNavigate(Screen.MESH)
+                                            }
+                                        )
+                                    } else {
+                                        displayChats.forEach { chat ->
+                                            RecentChatCard(
+                                                alias = chat.alias,
+                                                isOnline = chat.isOnline,
+                                                hopDistance = chat.hopDistance,
+                                                lastMessage = chat.lastMessage,
+                                                timestamp = chat.timestamp,
+                                                unreadCount = chat.unreadCount,
+                                                onClick = { onOpenPeerChat?.invoke(chat.peerId) },
+                                                onDelete = { meshEngine.deleteConversation(chat.peerId) }
+                                            )
+                                        }
                                     }
-                                )
-                            }
-                        }
-                    } else {
-                        items(displayChats, key = { it.peerId }, contentType = { "ChatSummary" }) { chat ->
-                            Box(
-                                modifier = Modifier
-                                    .widthIn(max = 840.dp)
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                RecentChatCard(
-                                    alias = chat.alias,
-                                    isOnline = chat.isOnline,
-                                    hopDistance = chat.hopDistance,
-                                    lastMessage = chat.lastMessage,
-                                    timestamp = chat.timestamp,
-                                    unreadCount = chat.unreadCount,
-                                    onClick = { onOpenPeerChat?.invoke(chat.peerId) },
-                                    onDelete = { meshEngine.deleteConversation(chat.peerId) }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // Channels Section
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .widthIn(max = 840.dp)
-                                .fillMaxWidth()
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ChannelRowCard(
-                                    channelName = "#emergency-broadcast",
-                                    description = "All-station emergency announcements and SOS broadcast feed.",
-                                    memberCount = "${filteredPeers.size + 1} Nearby",
-                                    isAlert = sosAlerts.isNotEmpty(),
-                                    onClick = { onNavigate(Screen.SOS_CENTER) }
-                                )
-                                ChannelRowCard(
-                                    channelName = "#mesh-general",
-                                    description = "Public community mesh chat. All local nodes can broadcast here.",
-                                    memberCount = "${filteredPeers.size} Peers",
-                                    isAlert = false,
-                                    onClick = { onNavigate(Screen.CHANNELS) }
-                                )
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    ChannelRowCard(
+                                        channelName = "#emergency-broadcast",
+                                        description = "All-station emergency announcements and SOS broadcast feed.",
+                                        memberCount = "${filteredPeers.size + 1} Nearby",
+                                        isAlert = sosAlerts.isNotEmpty(),
+                                        onClick = { onNavigate(Screen.SOS_CENTER) }
+                                    )
+                                    ChannelRowCard(
+                                        channelName = "#mesh-general",
+                                        description = "Public community mesh chat. All local nodes can broadcast here.",
+                                        memberCount = "${filteredPeers.size} Peers",
+                                        isAlert = false,
+                                        onClick = { onNavigate(Screen.CHANNELS) }
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Bottom CTA Button: Start Chat
+                // 3. Bottom CTA Button (Also aligned responsively)
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
                     Box(
@@ -458,9 +480,9 @@ fun MessagesScreen(
                                     ?: onNavigate(Screen.MESH)
                             },
                             modifier = Modifier
-                                .fillMaxWidth(if (isTablet) 0.5f else 1f)
+                                .fillMaxWidth()
                                 .height(50.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colors.primary,
                                 contentColor = if (colors.isDark) Color.Black else Color.White
@@ -564,7 +586,7 @@ private fun RecentChatCard(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider.copy(alpha = 0.7f)))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider.copy(alpha = 0.7f)))
     ) {
         Row(
             modifier = Modifier
@@ -572,7 +594,7 @@ private fun RecentChatCard(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Modern Avatar with online/offline badge
+            // Modern Avatar
             Box(contentAlignment = Alignment.BottomEnd) {
                 Box(
                     modifier = Modifier
@@ -750,7 +772,7 @@ private fun ChannelRowCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
     ) {
         Row(
             modifier = Modifier
@@ -820,7 +842,7 @@ private fun EmptyMessagesCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
     ) {
         Column(
             modifier = Modifier
@@ -857,7 +879,7 @@ private fun EmptyMessagesCard(
                 },
                 color = colors.textSecondary,
                 fontSize = 13.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
                 lineHeight = 18.sp
             )
             Spacer(modifier = Modifier.height(18.dp))

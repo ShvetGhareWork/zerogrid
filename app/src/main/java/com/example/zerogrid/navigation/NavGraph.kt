@@ -1,6 +1,13 @@
 package com.example.zerogrid.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -186,64 +193,79 @@ fun ZeroGridApp(
             Column(modifier = Modifier.fillMaxSize()) {
                 HardwareRequirementBanner()
 
-                if (currentSubScreen == Screen.TRACK_SOS) {
-                    TrackSosScreen(
-                        targetLat = trackSosLat,
-                        targetLng = trackSosLng,
-                        targetName = trackSosName,
-                        category = trackSosCategory,
-                        sosTimestamp = trackSosTimestamp,
-                        onBack = { navigateBack() }
-                    )
-                } else if (currentSubScreen != null) {
-                    RenderScreen(
-                        screen = currentSubScreen!!,
-                        selectedPeerId = selectedPeerId,
-                        onNavigate = { navigateTo(it) },
-                        onBack = { navigateBack() },
-                        onOpenPeerChat = { peerId ->
-                            selectedPeerId = peerId
-                            navigateTo(Screen.PEER_DIRECT_CHAT)
-                        },
-                        onLogout = onLogout
-                    )
-                } else {
-                    // Optimized HorizontalPager with hardware acceleration boundary
-                    HorizontalPager(
-                        state = pagerState,
-                        key = { page -> NavTab.entries[page].screen.name },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        beyondViewportPageCount = 1 // Keeps adjacent pages pre-rendered to eliminate swipe stutter/lag
-                    ) { page ->
-                        when (page) {
-                            0 -> MeshDashboardScreen(
-                                onNavigate = { navigateTo(it) },
-                                onOpenPeerChat = { peerId ->
-                                    selectedPeerId = peerId
-                                    navigateTo(Screen.PEER_DIRECT_CHAT)
-                                }
-                            )
-                            1 -> MessagesScreen(
-                                onNavigate = { navigateTo(it) },
-                                onOpenPeerChat = { peerId ->
-                                    selectedPeerId = peerId
-                                    navigateTo(Screen.PEER_DIRECT_CHAT)
-                                }
-                            )
-                            2 -> SosCenterScreen(
-                                onNavigate = { navigateTo(it) },
-                                onTrackSos = { lat, lng, name, category, timestamp ->
-                                    trackSosLat = lat
-                                    trackSosLng = lng
-                                    trackSosName = name
-                                    trackSosCategory = category
-                                    trackSosTimestamp = timestamp
-                                    navigateTo(Screen.TRACK_SOS)
-                                }
-                            )
-                            3 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
+                AnimatedContent(
+                    targetState = currentSubScreen,
+                    transitionSpec = {
+                        if (targetState != null) {
+                            // Opening a sub-screen (Chat / Channel / Details): Slide in from right (WhatsApp style)
+                            (slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(280)) + fadeIn(animationSpec = tween(280)))
+                                .togetherWith(slideOutHorizontally(targetOffsetX = { fullWidth -> -fullWidth / 3 }, animationSpec = tween(280)) + fadeOut(animationSpec = tween(280)))
+                        } else {
+                            // Navigating back to Main Paging Tabs: Slide sub-screen out to right
+                            (slideInHorizontally(initialOffsetX = { fullWidth -> -fullWidth / 3 }, animationSpec = tween(280)) + fadeIn(animationSpec = tween(280)))
+                                .togetherWith(slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }, animationSpec = tween(280)) + fadeOut(animationSpec = tween(280)))
+                        }
+                    },
+                    label = "SubScreenNavigation",
+                    modifier = Modifier.weight(1f)
+                ) { targetScreen ->
+                    if (targetScreen == Screen.TRACK_SOS) {
+                        TrackSosScreen(
+                            targetLat = trackSosLat,
+                            targetLng = trackSosLng,
+                            targetName = trackSosName,
+                            category = trackSosCategory,
+                            sosTimestamp = trackSosTimestamp,
+                            onBack = { navigateBack() }
+                        )
+                    } else if (targetScreen != null) {
+                        RenderScreen(
+                            screen = targetScreen,
+                            selectedPeerId = selectedPeerId,
+                            onNavigate = { navigateTo(it) },
+                            onBack = { navigateBack() },
+                            onOpenPeerChat = { peerId ->
+                                selectedPeerId = peerId
+                                navigateTo(Screen.PEER_DIRECT_CHAT)
+                            },
+                            onLogout = onLogout
+                        )
+                    } else {
+                        // Optimized HorizontalPager with hardware acceleration boundary
+                        HorizontalPager(
+                            state = pagerState,
+                            key = { page -> NavTab.entries[page].screen.name },
+                            modifier = Modifier.fillMaxSize(),
+                            beyondViewportPageCount = 1 // Keeps adjacent pages pre-rendered to eliminate swipe stutter/lag
+                        ) { page ->
+                            when (page) {
+                                0 -> MeshDashboardScreen(
+                                    onNavigate = { navigateTo(it) },
+                                    onOpenPeerChat = { peerId ->
+                                        selectedPeerId = peerId
+                                        navigateTo(Screen.PEER_DIRECT_CHAT)
+                                    }
+                                )
+                                1 -> MessagesScreen(
+                                    onNavigate = { navigateTo(it) },
+                                    onOpenPeerChat = { peerId ->
+                                        selectedPeerId = peerId
+                                        navigateTo(Screen.PEER_DIRECT_CHAT)
+                                    }
+                                )
+                                2 -> SosCenterScreen(
+                                    onNavigate = { navigateTo(it) },
+                                    onTrackSos = { lat, lng, name, category, timestamp ->
+                                        trackSosLat = lat
+                                        trackSosLng = lng
+                                        trackSosName = name
+                                        trackSosCategory = category
+                                        trackSosTimestamp = timestamp
+                                        navigateTo(Screen.TRACK_SOS)
+                                    }
+                                )
+                                3 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
+                            }
                         }
                     }
                 }
