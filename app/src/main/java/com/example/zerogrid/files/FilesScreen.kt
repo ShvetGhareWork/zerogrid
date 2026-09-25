@@ -49,7 +49,7 @@ data class OfflineFileItem(
 @Composable
 fun FilesScreen(onNavigate: (Screen) -> Unit = {}) {
     val context = LocalContext.current
-    val meshEngine = MeshEngine.getInstance(context)
+    val meshEngine = remember { MeshEngine.getInstance(context) }
     val peers by meshEngine.connectedPeers.collectAsState()
     val isMeshActive by meshEngine.isMeshActive.collectAsState()
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()

@@ -36,37 +36,40 @@ fun SosCenterScreen(
     onNavigate: (Screen) -> Unit = {},
     onTrackSos: ((Double, Double, String, String, Long) -> Unit)? = null
 ) {
-    val meshEngine = MeshEngine.getInstance(LocalContext.current)
+    val context = LocalContext.current
+    val meshEngine = remember { MeshEngine.getInstance(context) }
     val alerts by meshEngine.sosAlerts.collectAsState()
     val peers by meshEngine.connectedPeers.collectAsState()
     val acknowledgedIds by meshEngine.acknowledgedAlertIds.collectAsState()
     val localNodeId = meshEngine.localNodeId
     val colors = ZeroGridTheme.colors
 
-    // Sync active cloud emergencies whenever Emergency Center opens
+    // Sync active cloud emergencies off the main thread whenever Emergency Center opens
     LaunchedEffect(Unit) {
-        try {
-            val response = com.example.zerogrid.network.RetrofitInstance.sosApi.getActiveSos()
-            if (response.isSuccessful) {
-                response.body()?.events?.forEach { ev ->
-                    val coords = ev.location?.coordinates
-                    if (coords != null && coords.size >= 2) {
-                        val lng = coords[0]
-                        val lat = coords[1]
-                        meshEngine.recordExternalSosAlert(
-                            sosId = ev.id,
-                            senderName = ev.triggeredBy?.displayName ?: "Emergency Contact",
-                            category = ev.category,
-                            message = ev.message ?: "",
-                            lat = lat,
-                            lng = lng,
-                            accuracy = ev.accuracyMeters
-                        )
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val response = com.example.zerogrid.network.RetrofitInstance.sosApi.getActiveSos()
+                if (response.isSuccessful) {
+                    response.body()?.events?.forEach { ev ->
+                        val coords = ev.location?.coordinates
+                        if (coords != null && coords.size >= 2) {
+                            val lng = coords[0]
+                            val lat = coords[1]
+                            meshEngine.recordExternalSosAlert(
+                                sosId = ev.id,
+                                senderName = ev.triggeredBy?.displayName ?: "Emergency Contact",
+                                category = ev.category,
+                                message = ev.message ?: "",
+                                lat = lat,
+                                lng = lng,
+                                accuracy = ev.accuracyMeters
+                            )
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("SosCenterScreen", "Failed to sync active SOS from cloud", e)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("SosCenterScreen", "Failed to sync active SOS from cloud", e)
         }
     }
 

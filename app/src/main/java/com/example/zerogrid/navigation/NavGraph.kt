@@ -94,13 +94,17 @@ fun ZeroGridApp(
     var trackSosCategory by remember { mutableStateOf(initialTrackTarget?.category ?: "SOS") }
     var trackSosTimestamp by remember { mutableStateOf(initialTrackTarget?.timestamp ?: 0L) }
 
-    val currentTabScreen = when (pagerState.currentPage) {
-        0 -> Screen.HOME
-        1 -> Screen.MESSAGES
-        2 -> Screen.FILES
-        3 -> Screen.SOS_CENTER
-        4 -> Screen.SETTINGS
-        else -> Screen.HOME
+    val currentTabScreen by remember {
+        derivedStateOf {
+            when (pagerState.currentPage) {
+                0 -> Screen.HOME
+                1 -> Screen.MESSAGES
+                2 -> Screen.FILES
+                3 -> Screen.SOS_CENTER
+                4 -> Screen.SETTINGS
+                else -> Screen.HOME
+            }
+        }
     }
 
     // Only these 5 screens are true pager tab roots — navigating to them scrolls the pager.
@@ -199,6 +203,7 @@ fun ZeroGridApp(
                     // Optimized HorizontalPager with hardware acceleration boundary
                     HorizontalPager(
                         state = pagerState,
+                        key = { page -> NavTab.entries[page].screen.name },
                         modifier = Modifier
                             .fillMaxSize()
                             .weight(1f),

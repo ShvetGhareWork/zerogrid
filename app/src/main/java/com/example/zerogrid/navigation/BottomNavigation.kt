@@ -19,7 +19,9 @@ import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,13 +53,17 @@ fun ZeroGridMainScreen(
     val coroutineScope = rememberCoroutineScope()
 
     // Map the active pager page index to your Screen enum for bottom bar selection
-    val currentScreen = when (pagerState.currentPage) {
-        0 -> Screen.HOME
-        1 -> Screen.MESSAGES
-        2 -> Screen.FILES
-        3 -> Screen.SOS_CENTER
-        4 -> Screen.SETTINGS
-        else -> Screen.HOME
+    val currentScreen by remember {
+        derivedStateOf {
+            when (pagerState.currentPage) {
+                0 -> Screen.HOME
+                1 -> Screen.MESSAGES
+                2 -> Screen.FILES
+                3 -> Screen.SOS_CENTER
+                4 -> Screen.SETTINGS
+                else -> Screen.HOME
+            }
+        }
     }
 
     Scaffold(
@@ -84,6 +90,8 @@ fun ZeroGridMainScreen(
         // HorizontalPager enables native fluid swiping between screens like WhatsApp
         HorizontalPager(
             state = pagerState,
+            key = { page -> NavTab.entries[page].screen.name },
+            beyondViewportPageCount = 1,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -119,15 +127,19 @@ fun ZeroGridBottomBar(
 ) {
     val colors = ZeroGridTheme.colors
     val context = LocalContext.current
-    val meshEngine = MeshEngine.getInstance(context)
+    val meshEngine = remember { MeshEngine.getInstance(context) }
     val sosAlerts by meshEngine.sosAlerts.collectAsState()
     val conversations by meshEngine.conversations.collectAsState()
 
-    // Count unread incoming messages when not on Messages screen
-    val incomingMessagesCount = if (currentScreen == Screen.MESSAGES || currentScreen == Screen.PEER_DIRECT_CHAT) {
-        0
-    } else {
-        conversations.values.flatten().count { !it.isMine }
+    // Count unread incoming messages when not on Messages screen (derivedStateOf + sumOf eliminates per-frame list allocations)
+    val incomingMessagesCount by remember(conversations, currentScreen) {
+        derivedStateOf {
+            if (currentScreen == Screen.MESSAGES || currentScreen == Screen.PEER_DIRECT_CHAT) {
+                0
+            } else {
+                conversations.values.sumOf { msgList -> msgList.count { !it.isMine } }
+            }
+        }
     }
     val activeSosAlertsCount = sosAlerts.size
 
