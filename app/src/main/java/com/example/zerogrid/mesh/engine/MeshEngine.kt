@@ -38,6 +38,7 @@ class MeshEngine private constructor(private val context: Context) {
         private const val PREFS_NAME = "zerogrid_identity_prefs"
         private const val KEY_NODE_ID = "local_node_id"
         private const val KEY_DISPLAY_NAME = "display_name"
+        private const val KEY_ACKNOWLEDGED_ALERT_IDS = "acknowledged_alert_ids"
 
         @Volatile
         private var INSTANCE: MeshEngine? = null
@@ -107,7 +108,10 @@ class MeshEngine private constructor(private val context: Context) {
     private val _sosAlerts = MutableStateFlow<List<MeshPacket>>(emptyList())
     val sosAlerts: StateFlow<List<MeshPacket>> = _sosAlerts.asStateFlow()
 
-    private val _acknowledgedAlertIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _acknowledgedAlertIds = MutableStateFlow<Set<String>>(
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getStringSet(KEY_ACKNOWLEDGED_ALERT_IDS, emptySet())?.toSet() ?: emptySet()
+    )
     val acknowledgedAlertIds: StateFlow<Set<String>> = _acknowledgedAlertIds.asStateFlow()
 
     private val _packetsRelayedCount = MutableStateFlow(0)
@@ -320,20 +324,29 @@ class MeshEngine private constructor(private val context: Context) {
         }
     }
 
+    private fun persistAcknowledgedAlertId(id: String) {
+        val updated = _acknowledgedAlertIds.value + id
+        _acknowledgedAlertIds.value = updated
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_ACKNOWLEDGED_ALERT_IDS, updated)
+            .apply()
+    }
+
     fun acknowledgeSosAlert(packetId: String) {
-        _acknowledgedAlertIds.value = _acknowledgedAlertIds.value + packetId
+        persistAcknowledgedAlertId(packetId)
     }
 
     /**
      * Acknowledge a cloud/relative SOS alert:
-     * 1. Immediately marks it locally as acknowledged in [acknowledgedAlertIds].
+     * 1. Immediately marks it locally as acknowledged in [acknowledgedAlertIds] and SharedPreferences.
      * 2. Calls the backend PUT /api/sos/:id/acknowledge asynchronously.
      * confirmedSafe = true  → Relative SOS: "Are you sure he/she is safe?"
      * confirmedSafe = false → Local area SOS injected from cloud: "situation attended to"
      */
     fun acknowledgeCloudSosAlert(sosId: String, confirmedSafe: Boolean = true) {
-        // Immediately update local UI state
-        _acknowledgedAlertIds.value = _acknowledgedAlertIds.value + sosId
+        // Immediately update local UI state and persistence
+        persistAcknowledgedAlertId(sosId)
         // Fire backend call asynchronously
         scope.launch(Dispatchers.IO) {
             try {

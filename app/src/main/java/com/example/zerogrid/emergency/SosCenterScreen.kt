@@ -114,7 +114,7 @@ fun SosCenterScreen(
         )
     }
 
-    // Sync active cloud SOS events from backend into local state on screen open
+    // Sync cloud SOS events from backend into local state on screen open
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -132,6 +132,11 @@ fun SosCenterScreen(
                                 lng = coords[0],
                                 accuracy = ev.accuracyMeters
                             )
+                            // If this SOS was already acknowledged by the current user on the backend,
+                            // immediately mark it as acknowledged locally so it does not resurrect in the active list!
+                            if (ev.isAcknowledgedByMe) {
+                                meshEngine.acknowledgeSosAlert(ev.id)
+                            }
                         }
                     }
                 }

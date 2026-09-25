@@ -48,6 +48,7 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
     var gpsLng by remember { mutableStateOf<Double?>(null) }
     var gpsAccuracy by remember { mutableStateOf<Float?>(null) }
     var gpsFetching by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
     val activeChannelMode by meshEngine.activeChannelMode.collectAsState()
     val colors = ZeroGridTheme.colors
 
@@ -205,28 +206,38 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
                             // Broadcast SOS Action Button
                             Button(
                                 onClick = {
+                                    if (isSubmitting) return@Button
+                                    isSubmitting = true
                                     coroutineScope.launch {
-                                        // Acquire fresh GPS right before dispatch so coords are up-to-date
-                                        val (lat, lng, accuracy) = if (locationSharingEnabled) {
-                                            val r = LocationHelper.getCurrentLocation(context)
-                                            Triple(r?.lat, r?.lng, r?.accuracy)
-                                        } else {
-                                            Triple(null, null, null)
+                                        try {
+                                            // Acquire fresh GPS right before dispatch so coords are up-to-date
+                                            val (lat, lng, accuracy) = if (locationSharingEnabled) {
+                                                val r = LocationHelper.getCurrentLocation(context)
+                                                Triple(r?.lat, r?.lng, r?.accuracy)
+                                            } else {
+                                                Triple(null, null, null)
+                                            }
+                                            sosDispatcher.triggerSos(
+                                                lat = lat,
+                                                lng = lng,
+                                                accuracy = accuracy,
+                                                category = selectedType,
+                                                message = emergencyMessage
+                                            )
+                                        } finally {
+                                            isSubmitting = false
                                         }
-                                        sosDispatcher.triggerSos(
-                                            lat = lat,
-                                            lng = lng,
-                                            accuracy = accuracy,
-                                            category = selectedType,
-                                            message = emergencyMessage
-                                        )
                                     }
                                     onNavigate(Screen.SOS_CENTER)
                                 },
+                                enabled = !isSubmitting,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.accentRed),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accentRed,
+                                    disabledContainerColor = colors.accentRed.copy(alpha = 0.5f)
+                                ),
                                 shape = RoundedCornerShape(16.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -239,7 +250,7 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "BROADCAST SOS",
+                                        text = if (isSubmitting) "DISPATCHING..." else "BROADCAST SOS",
                                         color = Color.White,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
