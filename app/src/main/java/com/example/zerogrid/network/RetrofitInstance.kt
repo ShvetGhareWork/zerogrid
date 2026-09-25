@@ -58,4 +58,8 @@ object RetrofitInstance {
     val familyApi: FamilyApiService by lazy {
         retrofit.create(FamilyApiService::class.java)
     }
+
+    val adminApi: com.example.zerogrid.admin.data.AdminApiService by lazy {
+        retrofit.create(com.example.zerogrid.admin.data.AdminApiService::class.java)
+    }
 }

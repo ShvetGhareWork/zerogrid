@@ -105,4 +105,13 @@ dependencies {
 
     // WorkManager — Offline Queue
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Socket.IO client for Realtime SOS / Admin events
+    implementation("io.socket:socket.io-client:2.1.0") {
+        exclude(group = "org.json", module = "json")
+    }
+
+    // Google Maps Compose
+    implementation("com.google.maps.android:maps-compose:4.4.1")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
 }

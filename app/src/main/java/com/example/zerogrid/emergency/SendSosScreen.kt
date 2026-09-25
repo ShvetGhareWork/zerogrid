@@ -9,6 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -16,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -144,18 +151,6 @@ fun SendSosScreen(onNavigate: (Screen) -> Unit = {}) {
                                 accuracy = gpsAccuracy,
                                 isFetching = gpsFetching
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            // Estimated Mesh Reach Section
-                            Text(
-                                text = "ESTIMATED MESH REACH",
-                                color = colors.textSecondary,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            EstimatedMeshReachSection()
                             Spacer(modifier = Modifier.height(20.dp))
 
                             // Attach Information Section (Photo Only)
@@ -347,54 +342,101 @@ private fun SendSosTopBar(onBackClick: () -> Unit = {}) {
 @Composable
 private fun EmergencyBroadcastWarningCard() {
     val colors = ZeroGridTheme.colors
+    var isExpanded by remember { mutableStateOf(false) }
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        label = "chevron_rotation"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, colors.accentRed.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+            .border(1.dp, colors.accentRed.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable { isExpanded = !isExpanded },
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.Top
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Warning,
-                contentDescription = null,
-                tint = colors.accentRed,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = "Emergency Broadcast",
-                    color = colors.accentRed,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "This message will be broadcast to reachable ZeroGrid devices and may be relayed across the mesh.",
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
-                        imageVector = Icons.Outlined.WifiOff,
+                        imageVector = Icons.Outlined.Warning,
                         contentDescription = null,
-                        tint = colors.textSecondary,
-                        modifier = Modifier.size(12.dp)
+                        tint = colors.accentRed,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "No internet connection required.",
-                        color = colors.textSecondary,
-                        fontSize = 11.sp,
+                        text = "Emergency Broadcast",
+                        color = colors.accentRed,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
+                    if (!isExpanded) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "• Tap for info",
+                            color = colors.textSecondary.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = colors.accentRed,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(rotationAngle)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    HorizontalDivider(
+                        color = colors.accentRed.copy(alpha = 0.2f),
+                        thickness = 1.dp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "This message will be broadcast to reachable ZeroGrid devices and may be relayed across the mesh.",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.WifiOff,
+                            contentDescription = null,
+                            tint = colors.textSecondary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "No internet connection required.",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }
@@ -568,106 +610,6 @@ private fun LocationSharingCard(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EstimatedMeshReachSection() {
-    val colors = ZeroGridTheme.colors
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.divider)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(6.dp).background(BadgeGreen, CircleShape))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "MESH ACTIVE",
-                        color = BadgeGreen,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.surfaceNested, RoundedCornerShape(8.dp))
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Text(
-                            text = "Nearby devices",
-                            color = colors.textSecondary,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "12",
-                            color = colors.textPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.surfaceNested, RoundedCornerShape(8.dp))
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Text(
-                            text = "Est. relay hops",
-                            color = colors.textSecondary,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Up to 8",
-                            color = colors.textPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.Hub,
-                    contentDescription = null,
-                    tint = BadgeGreen,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Multiple connected devices",
-                    color = BadgeGreen,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium
                 )
             }
         }

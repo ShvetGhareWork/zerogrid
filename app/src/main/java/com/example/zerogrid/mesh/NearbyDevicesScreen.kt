@@ -74,7 +74,7 @@ fun NearbyDevicesScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item(key = "discovery_card") {
-                MeshDiscoveryCard(peers.size)
+                MeshDiscoverySubheader(peers.size)
             }
             item(key = "radar_card") {
                 RadarGraphicCard(peersCount = peers.size)
@@ -137,90 +137,58 @@ private fun NearbyTopBar(onBackClick: () -> Unit = {}) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Nearby Devices",
-                    color = colors.primary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBackClick) {
                 Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = "Search",
-                    tint = colors.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(20.dp))
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "More",
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
                     tint = colors.primary,
                     modifier = Modifier.size(24.dp)
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Nearby Devices",
+                color = colors.primary,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
         HorizontalDivider(color = colors.divider, thickness = 1.dp)
     }
 }
 
 @Composable
-private fun MeshDiscoveryCard(devicesFound: Int) {
+private fun MeshDiscoverySubheader(devicesFound: Int) {
     val colors = ZeroGridTheme.colors
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-        shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).background(colors.primary, CircleShape))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Mesh Discovery Active",
-                    color = colors.primary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                text = "Scanning for nearby ZeroGrid devices...",
-                color = colors.textSecondary,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(colors.primary, CircleShape)
             )
-            HorizontalDivider(color = colors.divider, thickness = 1.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(text = "DEVICES FOUND", color = colors.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "$devicesFound", color = colors.primary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "PROTOCOL", color = colors.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "BLE + Wi-Fi Direct", color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Mesh Discovery Active",
+                color = colors.primary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
+        Text(
+            text = "$devicesFound ${if (devicesFound == 1) "device" else "devices"} found",
+            color = colors.textSecondary,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace
+        )
     }
 }
 
