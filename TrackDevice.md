@@ -1,6 +1,6 @@
 # SOS Real GPS Location Broadcast & Compass Tracking Implementation Plan
 
-## Overview
+## Overview:
 
 When an SOS is triggered, the sender's real-time GPS location (latitude, longitude, accuracy) must be obtained and transmitted both:
 
