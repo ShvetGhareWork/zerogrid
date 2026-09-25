@@ -49,8 +49,12 @@ class SosUploadWorker(
                 .addTag("SOS_OFFLINE_UPLOAD")
                 .build()
 
-            WorkManager.getInstance(context).enqueue(workRequest)
-            Log.d(TAG, "Offline SOS request enqueued in WorkManager with network constraint.")
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "SOS_OFFLINE_UPLOAD_UNIQUE",
+                ExistingWorkPolicy.KEEP,
+                workRequest
+            )
+            Log.d(TAG, "Offline SOS request enqueued in WorkManager with unique policy.")
         }
     }
 
