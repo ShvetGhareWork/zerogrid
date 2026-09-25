@@ -11,12 +11,13 @@ import retrofit2.http.Path
 // ── Request Bodies ───────────────────────────────────────────────────────────
 
 data class SosDispatchRequest(
-    @SerializedName("lat")       val lat: Double,
-    @SerializedName("lng")       val lng: Double,
-    @SerializedName("accuracy")  val accuracy: Float? = null,
-    @SerializedName("category")  val category: String = "OTHER",
-    @SerializedName("message")   val message: String? = null,
-    @SerializedName("transport") val transport: String = "BOTH"
+    @SerializedName("lat")               val lat: Double,
+    @SerializedName("lng")               val lng: Double,
+    @SerializedName("accuracy")          val accuracy: Float? = null,
+    @SerializedName("category")          val category: String = "OTHER",
+    @SerializedName("message")           val message: String? = null,
+    @SerializedName("transport")         val transport: String = "BOTH",
+    @SerializedName("batteryPercentage") val batteryPercentage: Int? = null
 )
 
 /**
@@ -57,6 +58,7 @@ data class SosEventDto(
     @SerializedName("category")            val category: String = "OTHER",
     @SerializedName("message")             val message: String? = null,
     @SerializedName("transport")           val transport: String = "BOTH",
+    @SerializedName("batteryPercentage")   val batteryPercentage: Int? = null,
     @SerializedName("status")             val status: String = "ACTIVE",
     @SerializedName("acknowledgedBy")     val acknowledgedBy: String? = null,
     @SerializedName("acknowledgedByUsers") val acknowledgedByUsers: List<SosAckEntryDto> = emptyList(),

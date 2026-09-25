@@ -66,13 +66,17 @@ class UnifiedSosDispatcher(
             else -> "OTHER"
         }
 
+        // 2b. Obtain live Device Battery Percentage
+        val batteryPercentage = getDeviceBatteryPercentage(context)
+
         val request = SosDispatchRequest(
             lat = lat ?: 0.0,
             lng = lng ?: 0.0,
             accuracy = accuracy,
             category = normalizedCategory,
             message = message.ifBlank { "Emergency SOS triggered" },
-            transport = "BOTH"
+            transport = "BOTH",
+            batteryPercentage = batteryPercentage
         )
 
         // 3. Online Rescue Network Dispatch
@@ -126,6 +130,27 @@ class UnifiedSosDispatcher(
             Log.d(TAG, "SOS enqueued via WorkManager for background delivery once internet returns.")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enqueue SOS with WorkManager", e)
+        }
+    }
+
+    private fun getDeviceBatteryPercentage(context: Context): Int? {
+        return try {
+            val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+            val level = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            if (level != null && level in 0..100) {
+                level
+            } else {
+                val ifilter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+                val batteryStatus = context.registerReceiver(null, ifilter)
+                val rawLevel = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val scale = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+                if (rawLevel >= 0 && scale > 0) {
+                    ((rawLevel / scale.toFloat()) * 100).toInt()
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not read battery level", e)
+            null
         }
     }
 }

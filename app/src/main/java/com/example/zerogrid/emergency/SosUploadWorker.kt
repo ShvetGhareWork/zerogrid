@@ -20,6 +20,7 @@ class SosUploadWorker(
         const val KEY_CATEGORY = "sos_category"
         const val KEY_MESSAGE = "sos_message"
         const val KEY_TRANSPORT = "sos_transport"
+        const val KEY_BATTERY = "sos_battery"
 
         /**
          * Enqueues an offline SOS alert with network constraints and exponential backoff retry.
@@ -32,6 +33,7 @@ class SosUploadWorker(
                 .putString(KEY_CATEGORY, request.category)
                 .putString(KEY_MESSAGE, request.message ?: "")
                 .putString(KEY_TRANSPORT, request.transport)
+                .putInt(KEY_BATTERY, request.batteryPercentage ?: -1)
                 .build()
 
             val constraints = Constraints.Builder()
@@ -66,6 +68,8 @@ class SosUploadWorker(
         val category = inputData.getString(KEY_CATEGORY) ?: "OTHER"
         val message = inputData.getString(KEY_MESSAGE)
         val transport = inputData.getString(KEY_TRANSPORT) ?: "BOTH"
+        val batteryRaw = inputData.getInt(KEY_BATTERY, -1)
+        val battery = if (batteryRaw >= 0) batteryRaw else null
 
         val request = SosDispatchRequest(
             lat = lat,
@@ -73,7 +77,8 @@ class SosUploadWorker(
             accuracy = accuracy,
             category = category,
             message = message,
-            transport = transport
+            transport = transport,
+            batteryPercentage = battery
         )
 
         Log.d(TAG, "Attempting to dispatch queued SOS to backend: lat=$lat, lng=$lng, cat=$category")
