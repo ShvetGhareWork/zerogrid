@@ -7,6 +7,8 @@ import com.example.zerogrid.messaging.MessageStore
 import com.example.zerogrid.messaging.StoredMessage
 import com.example.zerogrid.mesh.transport.BleMeshDriver
 import com.example.zerogrid.mesh.transport.WifiDirectMeshDriver
+import com.example.zerogrid.network.AcknowledgeSosRequest
+import com.example.zerogrid.network.RetrofitInstance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -246,6 +248,35 @@ class MeshEngine private constructor(private val context: Context) {
         _acknowledgedAlertIds.value = _acknowledgedAlertIds.value + packetId
     }
 
+    /**
+     * Acknowledge a cloud/relative SOS alert:
+     * 1. Immediately marks it locally as acknowledged in [acknowledgedAlertIds].
+     * 2. Calls the backend PUT /api/sos/:id/acknowledge asynchronously.
+     * confirmedSafe = true  → Relative SOS: "Are you sure he/she is safe?"
+     * confirmedSafe = false → Local area SOS injected from cloud: "situation attended to"
+     */
+    fun acknowledgeCloudSosAlert(sosId: String, confirmedSafe: Boolean = true) {
+        // Immediately update local UI state
+        _acknowledgedAlertIds.value = _acknowledgedAlertIds.value + sosId
+        // Fire backend call asynchronously
+        scope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitInstance.sosApi.acknowledgeSos(
+                    id = sosId,
+                    body = AcknowledgeSosRequest(confirmedSafe = confirmedSafe)
+                )
+                if (response.isSuccessful) {
+                    Log.d(TAG, "Cloud SOS $sosId acknowledged on backend (confirmedSafe=$confirmedSafe)")
+                } else {
+                    Log.w(TAG, "Backend acknowledge returned ${response.code()} for SOS $sosId")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to acknowledge cloud SOS $sosId on backend", e)
+                // Local state already updated — user sees it dismissed regardless of network
+            }
+        }
+    }
+
     fun getPublicKeyFingerprint(): String {
         return try {
             val md = MessageDigest.getInstance("SHA-256")
@@ -472,6 +503,7 @@ class MeshEngine private constructor(private val context: Context) {
     /**
      * Injects a cloud/FCM SOS alert received for an emergency contact or remote event into local state.
      * Allows Emergency Center to log and track cloud-dispatched emergencies alongside mesh alerts.
+     * Tagged with isCloud=true in the JSON payload so the UI can display it in the "Relative / Family SOS" section.
      */
     fun recordExternalSosAlert(
         sosId: String,
@@ -489,7 +521,8 @@ class MeshEngine private constructor(private val context: Context) {
             lat = lat,
             lng = lng,
             accuracy = accuracy,
-            senderName = senderName
+            senderName = senderName,
+            isCloud = true  // tag so SosCenterScreen puts it in the Relative/Family section
         )
         val packet = MeshPacket(
             packetId = sosId.ifBlank { UUID.randomUUID().toString() },

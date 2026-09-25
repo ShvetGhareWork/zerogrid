@@ -85,6 +85,18 @@ data class MeshPacket(
         }
     }
 
+    /**
+     * Returns true if this SOS packet was injected from the cloud/FCM (relative/family alert).
+     * Returns false if it was received over the local BLE/Wi-Fi mesh.
+     */
+    fun isCloudSos(): Boolean {
+        return try {
+            JSONObject(payload).optBoolean("isCloud", false)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     companion object {
         const val BROADCAST_ADDRESS = "*"
         const val DEFAULT_TTL = 5
@@ -99,7 +111,8 @@ data class MeshPacket(
             lat: Double,
             lng: Double,
             accuracy: Float? = null,
-            senderName: String? = null
+            senderName: String? = null,
+            isCloud: Boolean = false
         ): String {
             val json = JSONObject()
             json.put("category", category)
@@ -108,6 +121,7 @@ data class MeshPacket(
             json.put("lng", lng)
             if (accuracy != null) json.put("accuracy", accuracy.toDouble())
             if (!senderName.isNullOrBlank()) json.put("senderName", senderName)
+            if (isCloud) json.put("isCloud", true)
             json.put("ts", System.currentTimeMillis())
             return json.toString()
         }
