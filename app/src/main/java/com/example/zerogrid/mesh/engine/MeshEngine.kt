@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import java.util.UUID
+import com.example.zerogrid.service.MeshForegroundService
 
 /**
  * Central Mesh Engine orchestrator for ZeroGrid.
@@ -119,27 +120,13 @@ class MeshEngine private constructor(private val context: Context) {
     init {
         com.zerogrid.mesh.app.service.MeshPeerResolver.getInstance().setLocalNodeId(localNodeId)
 
-        // Load persisted conversations from disk into memory, purging any accidental self conversations
+        // Zero-waste ephemeral messaging: purge persisted disk conversations so each app launch starts completely clean
         scope.launch {
-            val allPeerIds = messageStore.getAllConversationPeerIds()
-            val loaded = mutableMapOf<String, List<StoredMessage>>()
-            val localSuffix = localNodeId.removePrefix("NODE-")
-            allPeerIds.forEach { peerId ->
-                val alias = messageStore.getPeerDisplayName(peerId)
-                if (peerId.equals(localNodeId, ignoreCase = true) ||
-                    peerId.removePrefix("NODE-").equals(localSuffix, ignoreCase = true) ||
-                    alias.equals(android.os.Build.MODEL, ignoreCase = true) ||
-                    alias.equals(_displayName.value, ignoreCase = true)
-                ) {
-                    messageStore.deleteConversation(peerId)
-                } else {
-                    loaded[peerId] = messageStore.getConversation(peerId)
-                }
-            }
+            messageStore.clearAllMessages()
             synchronized(stateLock) {
-                _conversations.value = loaded
+                _conversations.value = emptyMap()
             }
-            Log.d(TAG, "Loaded ${loaded.size} conversations from MessageStore")
+            Log.d(TAG, "Cleared disk conversation cache for zero-waste ephemeral session")
         }
 
         transports.forEach { transport ->
@@ -213,6 +200,24 @@ class MeshEngine private constructor(private val context: Context) {
 
     /** Returns formatted or known custom display name for a given peer ID. */
     fun getPeerDisplayName(peerId: String): String = messageStore.getPeerDisplayName(peerId)
+
+    /** Wipes all conversations in-memory and on disk immediately for zero-waste session clearing. */
+    fun clearAllConversations() {
+        messageStore.clearAllMessages()
+        synchronized(stateLock) {
+            _conversations.value = emptyMap()
+        }
+    }
+
+    /** Removes a specific peer conversation in-memory and on disk. */
+    fun deleteConversation(peerId: String) {
+        messageStore.deleteConversation(peerId)
+        synchronized(stateLock) {
+            val updated = _conversations.value.toMutableMap()
+            updated.remove(peerId)
+            _conversations.value = updated
+        }
+    }
 
     /** Broadcasts our user-selected display name across all mesh transports. */
     fun broadcastPeerAnnounce() {
@@ -589,6 +594,16 @@ class MeshEngine private constructor(private val context: Context) {
                     status = MessageStatus.DELIVERED
                 )
                 persistAndUpdateConversation(packet.senderId, stored)
+
+                // Show notification for incoming direct chat message
+                val senderDisplayName = knownPeer?.alias?.takeIf { !it.startsWith("Peer ") && it.isNotBlank() }
+                    ?: messageStore.getPeerDisplayName(packet.senderId)
+                MeshForegroundService.showMessageNotification(
+                    context = context,
+                    peerId = packet.senderId,
+                    senderName = senderDisplayName,
+                    payload = packet.payload
+                )
 
                 // Send ACK back to sender to confirm delivery
                 val ackPacket = MeshPacket(

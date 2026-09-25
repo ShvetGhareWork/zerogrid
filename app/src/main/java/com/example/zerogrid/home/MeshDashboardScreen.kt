@@ -478,12 +478,12 @@ private fun QuickActionsGrid(
             )
             QuickActionTile(
                 modifier = Modifier.weight(1f),
-                title = "Files",
-                subtitle = "Direct transfer",
-                icon = Icons.Outlined.FolderOpen,
+                title = "Nearby",
+                subtitle = "Peer discovery",
+                icon = Icons.Outlined.Devices,
                 iconTint = Color(0xFF3B82F6),
                 iconBg = Color(0xFF3B82F6).copy(alpha = 0.1f),
-                onClick = { onNavigate(Screen.FILES) }
+                onClick = { onNavigate(Screen.MESH) }
             )
             QuickActionTile(
                 modifier = Modifier.weight(1f),
@@ -524,12 +524,12 @@ private fun QuickActionsGrid(
                 )
                 QuickActionTile(
                     modifier = Modifier.weight(1f),
-                    title = "Files",
-                    subtitle = "Direct transfer",
-                    icon = Icons.Outlined.FolderOpen,
+                    title = "Nearby",
+                    subtitle = "Peer discovery",
+                    icon = Icons.Outlined.Devices,
                     iconTint = Color(0xFF3B82F6),
                     iconBg = Color(0xFF3B82F6).copy(alpha = 0.1f),
-                    onClick = { onNavigate(Screen.FILES) }
+                    onClick = { onNavigate(Screen.MESH) }
                 )
             }
             Row(

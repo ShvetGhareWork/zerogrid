@@ -29,6 +29,7 @@ class MeshForegroundService : Service() {
         private const val TAG = "MeshForegroundService"
         private const val CHANNEL_ID = "zerogrid_mesh_channel"
         private const val SOS_CHANNEL_ID = "zerogrid_sos_channel"
+        private const val MESSAGES_CHANNEL_ID = "zerogrid_chat_channel"
         private const val NOTIFICATION_ID = 1001
         private const val SOS_NOTIFICATION_ID = 9999
 
@@ -47,6 +48,53 @@ class MeshForegroundService : Service() {
                 context.stopService(intent)
             } catch (e: Throwable) {
                 Log.e(TAG, "Error stopping MeshForegroundService", e)
+            }
+        }
+
+        fun showMessageNotification(context: Context, peerId: String, senderName: String, payload: String) {
+            try {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        MESSAGES_CHANNEL_ID,
+                        "ZeroGrid Direct Messages",
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = "Notifications for incoming mesh direct messages"
+                        enableVibration(true)
+                        enableLights(true)
+                    }
+                    notificationManager.createNotificationChannel(channel)
+                }
+
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("OPEN_PEER_CHAT", peerId)
+                }
+                val requestCode = (peerId.hashCode() and 0xFFFF)
+                val pendingIntent = PendingIntent.getActivity(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+
+                val notification = NotificationCompat.Builder(context, MESSAGES_CHANNEL_ID)
+                    .setContentTitle(senderName)
+                    .setContentText(payload)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(payload))
+                    .setSmallIcon(android.R.drawable.stat_notify_chat)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+
+                val notifId = 20000 + (peerId.hashCode() and 0x7FFF)
+                notificationManager.notify(notifId, notification)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error showing message notification", e)
             }
         }
 

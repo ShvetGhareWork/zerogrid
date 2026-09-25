@@ -76,8 +76,7 @@ fun PeerDetailsScreen(
                 onMessageClick = {
                     if (peerId.isNotEmpty()) onOpenPeerChat(peerId)
                     else onNavigate(Screen.MESSAGES)
-                },
-                onSendFileClick = { onNavigate(Screen.SEND_FILE) }
+                }
             )
             Spacer(modifier = Modifier.height(24.dp))
             ConnectionInfoCard(
@@ -101,12 +100,6 @@ fun PeerDetailsScreen(
             Spacer(modifier = Modifier.height(16.dp))
             TrustDeviceCard(checked = trustDevice, onCheckedChange = { trustDevice = it })
             Spacer(modifier = Modifier.height(16.dp))
-            MenuNavigationItem(
-                icon = Icons.Outlined.Folder,
-                title = "View Shared Files",
-                titleColor = TextPrimary,
-                onClick = { onNavigate(Screen.FILES) }
-            )
             Spacer(modifier = Modifier.height(8.dp))
             MenuNavigationItem(
                 icon = Icons.Outlined.DeleteOutline,
@@ -242,39 +235,19 @@ private fun PeerHeaderSection(
 
 @Composable
 private fun ActionButtonsRow(
-    onMessageClick: () -> Unit,
-    onSendFileClick: () -> Unit
+    onMessageClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    Button(
+        onClick = onMessageClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = StatusActive, contentColor = Color.Black),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Button(
-            onClick = onMessageClick,
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = StatusActive, contentColor = Color.Black),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(imageVector = Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Message", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        }
-
-        OutlinedButton(
-            onClick = onSendFileClick,
-            modifier = Modifier
-                .weight(1f)
-                .height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusActive),
-            border = androidx.compose.foundation.BorderStroke(1.dp, StatusActive),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(imageVector = Icons.Outlined.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Send File", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        }
+        Icon(imageVector = Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = "Message", fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 

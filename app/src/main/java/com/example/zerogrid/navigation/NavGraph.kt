@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.zerogrid.emergency.*
-import com.example.zerogrid.files.*
 import com.example.zerogrid.hardware.HardwareRequirementBanner
 import com.example.zerogrid.home.*
 import com.example.zerogrid.mesh.*
@@ -70,9 +69,8 @@ fun ZeroGridApp(
     val initialPage = when (initialScreen) {
         Screen.HOME -> 0
         Screen.MESSAGES -> 1
-        Screen.FILES -> 2
-        Screen.SOS_CENTER -> 3
-        Screen.SETTINGS -> 4
+        Screen.SOS_CENTER -> 2
+        Screen.SETTINGS -> 3
         else -> 0
     }
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { NavTab.entries.size })
@@ -80,7 +78,7 @@ fun ZeroGridApp(
         mutableStateListOf<Screen>().apply {
             if (initialTrackTarget != null) {
                 add(Screen.TRACK_SOS)
-            } else if (initialScreen !in setOf(Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS)) {
+            } else if (initialScreen !in setOf(Screen.HOME, Screen.MESSAGES, Screen.SOS_CENTER, Screen.SETTINGS)) {
                 add(initialScreen)
             }
         }
@@ -97,17 +95,16 @@ fun ZeroGridApp(
     val currentTabScreen = when (pagerState.currentPage) {
         0 -> Screen.HOME
         1 -> Screen.MESSAGES
-        2 -> Screen.FILES
-        3 -> Screen.SOS_CENTER
-        4 -> Screen.SETTINGS
+        2 -> Screen.SOS_CENTER
+        3 -> Screen.SETTINGS
         else -> Screen.HOME
     }
 
-    // Only these 5 screens are true pager tab roots — navigating to them scrolls the pager.
+    // Only these 4 screens are true pager tab roots — navigating to them scrolls the pager.
     // ALL other screens (sub-screens like EMERGENCY_CONTACTS, CHANNELS, FAMILY_LINKS, etc.)
     // must be pushed as currentSubScreen overlays, never as pager tab switches.
     val tabRootScreens = setOf(
-        Screen.HOME, Screen.MESSAGES, Screen.FILES, Screen.SOS_CENTER, Screen.SETTINGS
+        Screen.HOME, Screen.MESSAGES, Screen.SOS_CENTER, Screen.SETTINGS
     )
 
     fun navigateTo(screen: Screen) {
@@ -116,9 +113,8 @@ fun ZeroGridApp(
             val index = when (screen) {
                 Screen.HOME -> 0
                 Screen.MESSAGES -> 1
-                Screen.FILES -> 2
-                Screen.SOS_CENTER -> 3
-                Screen.SETTINGS -> 4
+                Screen.SOS_CENTER -> 2
+                Screen.SETTINGS -> 3
                 else -> return
             }
             coroutineScope.launch { pagerState.animateScrollToPage(index) }
@@ -219,8 +215,7 @@ fun ZeroGridApp(
                                     navigateTo(Screen.PEER_DIRECT_CHAT)
                                 }
                             )
-                            2 -> FilesScreen(onNavigate = { navigateTo(it) })
-                            3 -> SosCenterScreen(
+                            2 -> SosCenterScreen(
                                 onNavigate = { navigateTo(it) },
                                 onTrackSos = { lat, lng, name, category, timestamp ->
                                     trackSosLat = lat
@@ -231,7 +226,7 @@ fun ZeroGridApp(
                                     navigateTo(Screen.TRACK_SOS)
                                 }
                             )
-                            4 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
+                            3 -> SettingsScreen(onNavigate = { navigateTo(it) }, onLogout = onLogout)
                         }
                     }
                 }
@@ -259,12 +254,9 @@ private fun RenderScreen(
             onOpenPeerDetails = { peerId -> onOpenPeerChat(peerId) },
             onOpenPeerChat = onOpenPeerChat
         )
-        Screen.FILES -> FilesScreen(onNavigate = onNavigate)
         Screen.SETTINGS -> SettingsScreen(onNavigate = onNavigate, onLogout = onLogout)
         Screen.SOS_CENTER -> SosCenterScreen(onNavigate = onNavigate)
         Screen.SEND_SOS -> SendSosScreen(onNavigate = onNavigate)
-        Screen.SEND_FILE -> SendFileScreen(onNavigate = onNavigate)
-        Screen.FILE_TRANSFER -> FileTransferScreen(onNavigate = onNavigate)
         Screen.PEER_DETAILS -> PeerDetailsScreen(
             peerId = selectedPeerId,
             onNavigate = onNavigate,
@@ -301,7 +293,6 @@ private fun getTabRootScreens(tab: NavTab): List<Screen> {
     return when (tab) {
         NavTab.MESH -> listOf(Screen.HOME, Screen.MESH, Screen.PEER_DETAILS, Screen.NETWORK_STATUS)
         NavTab.MESSAGES -> listOf(Screen.MESSAGES, Screen.CHANNELS, Screen.CHAT_DETAIL, Screen.PEER_DIRECT_CHAT)
-        NavTab.FILES -> listOf(Screen.FILES, Screen.SEND_FILE, Screen.FILE_TRANSFER)
         NavTab.SOS -> listOf(Screen.SOS_CENTER, Screen.SEND_SOS, Screen.TRACK_SOS)
         NavTab.SETTINGS -> listOf(Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE)
     }

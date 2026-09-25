@@ -37,7 +37,6 @@ import kotlinx.coroutines.launch
 enum class NavTab(val label: String, val icon: ImageVector, val screen: Screen) {
     MESH("Mesh", Icons.Outlined.Hub, Screen.HOME),
     MESSAGES("Messages", Icons.Outlined.ChatBubbleOutline, Screen.MESSAGES),
-    FILES("Files", Icons.Outlined.Folder, Screen.FILES),
     SOS("SOS", Icons.Outlined.WarningAmber, Screen.SOS_CENTER),
     SETTINGS("Settings", Icons.Outlined.Settings, Screen.SETTINGS)
 }
@@ -54,9 +53,8 @@ fun ZeroGridMainScreen(
     val currentScreen = when (pagerState.currentPage) {
         0 -> Screen.HOME
         1 -> Screen.MESSAGES
-        2 -> Screen.FILES
-        3 -> Screen.SOS_CENTER
-        4 -> Screen.SETTINGS
+        2 -> Screen.SOS_CENTER
+        3 -> Screen.SETTINGS
         else -> Screen.HOME
     }
 
@@ -68,9 +66,8 @@ fun ZeroGridMainScreen(
                     val targetIndex = when (targetScreen) {
                         Screen.HOME, Screen.MESH, Screen.PEER_DETAILS, Screen.NETWORK_STATUS -> 0
                         Screen.MESSAGES, Screen.CHANNELS, Screen.CHAT_DETAIL, Screen.PEER_DIRECT_CHAT -> 1
-                        Screen.FILES, Screen.SEND_FILE, Screen.FILE_TRANSFER -> 2
-                        Screen.SOS_CENTER, Screen.SEND_SOS -> 3
-                        Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE -> 4
+                        Screen.SOS_CENTER, Screen.SEND_SOS -> 2
+                        Screen.SETTINGS, Screen.SECURITY_PRIVACY, Screen.EMERGENCY_CONTACTS, Screen.FAMILY_LINKS, Screen.PROFILE -> 3
                         else -> 0
                     }
                     // Smoothly scroll the pager when a bottom bar item is tapped
@@ -94,9 +91,8 @@ fun ZeroGridMainScreen(
                         val targetIndex = when (targetScreen) {
                             Screen.HOME, Screen.MESH -> 0
                             Screen.MESSAGES, Screen.CHANNELS -> 1
-                            Screen.FILES -> 2
-                            Screen.SOS_CENTER -> 3
-                            Screen.SETTINGS, Screen.PROFILE -> 4
+                            Screen.SOS_CENTER -> 2
+                            Screen.SETTINGS, Screen.PROFILE -> 3
                             else -> 0
                         }
                         coroutineScope.launch { pagerState.animateScrollToPage(targetIndex) }
@@ -104,9 +100,8 @@ fun ZeroGridMainScreen(
                     onOpenPeerChat = onOpenPeerChat
                 )
                 1 -> MessagesScreenPlaceholder()
-                2 -> FilesScreenPlaceholder()
-                3 -> SosScreenPlaceholder()
-                4 -> SettingsScreenPlaceholder()
+                2 -> SosScreenPlaceholder()
+                3 -> SettingsScreenPlaceholder()
             }
         }
     }
@@ -146,7 +141,6 @@ fun ZeroGridBottomBar(
                 val selected = when (tab) {
                     NavTab.MESH -> (currentScreen == Screen.HOME || currentScreen == Screen.MESH || currentScreen == Screen.PEER_DETAILS || currentScreen == Screen.NETWORK_STATUS)
                     NavTab.MESSAGES -> (currentScreen == Screen.MESSAGES || currentScreen == Screen.CHANNELS || currentScreen == Screen.CHAT_DETAIL || currentScreen == Screen.PEER_DIRECT_CHAT)
-                    NavTab.FILES -> (currentScreen == Screen.FILES || currentScreen == Screen.SEND_FILE || currentScreen == Screen.FILE_TRANSFER)
                     NavTab.SOS -> (currentScreen == Screen.SOS_CENTER || currentScreen == Screen.SEND_SOS)
                     NavTab.SETTINGS -> (currentScreen == Screen.SETTINGS || currentScreen == Screen.SECURITY_PRIVACY || currentScreen == Screen.EMERGENCY_CONTACTS || currentScreen == Screen.FAMILY_LINKS || currentScreen == Screen.PROFILE)
                 }
@@ -221,6 +215,5 @@ fun ZeroGridBottomBar(
 
 // Placeholders for remaining tab destinations (replace with your actual screens)
 @Composable fun MessagesScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Messages Screen") } }
-@Composable fun FilesScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Files Screen") } }
 @Composable fun SosScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("SOS Screen") } }
 @Composable fun SettingsScreenPlaceholder() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Settings Screen") } }
