@@ -35,6 +35,9 @@ import com.example.zerogrid.home.MeshDashboardScreen
 import com.example.zerogrid.mesh.engine.MeshEngine
 import com.example.zerogrid.ui.theme.ZeroGridTheme
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
+
 
 enum class NavTab(val label: String, val icon: ImageVector, val screen: Screen) {
     MESH("Mesh", Icons.Outlined.Hub, Screen.HOME),

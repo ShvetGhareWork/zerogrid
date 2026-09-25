@@ -89,37 +89,42 @@ fun MessagesScreen(
     // Fast O(1) peer lookup map to eliminate linear searches during list building
     val peerMap = remember(filteredPeers) { filteredPeers.associateBy { it.nodeId } }
 
-    // Precomputed immutable UI model list, dynamically sorted by most recent chat first
-    val displayChats = remember(allChatPeerIds, searchQuery, conversations, peerMap) {
-        allChatPeerIds.mapNotNull { peerId ->
-            val peer = peerMap[peerId]
-            val messages = conversations[peerId] ?: emptyList()
-            if (peer == null && messages.isEmpty()) {
-                return@mapNotNull null
-            }
-            val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
-            val lastMsg = messages.lastOrNull()
-            val lastMsgText = lastMsg?.text ?: if (peer != null) "Connected • Ready to chat" else "Offline"
-            val lastTimestamp = lastMsg?.timestamp ?: (peer?.lastSeenTimestamp ?: System.currentTimeMillis())
+    // Precomputed immutable UI model list, dynamically sorted off the main thread
+    val displayChats by produceState(
+        initialValue = emptyList<ChatSummaryUiModel>(),
+        allChatPeerIds, searchQuery, conversations, peerMap
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            allChatPeerIds.mapNotNull { peerId ->
+                val peer = peerMap[peerId]
+                val messages = conversations[peerId] ?: emptyList()
+                if (peer == null && messages.isEmpty()) {
+                    return@mapNotNull null
+                }
+                val alias = peer?.alias ?: meshEngine.getPeerDisplayName(peerId)
+                val lastMsg = messages.lastOrNull()
+                val lastMsgText = lastMsg?.text ?: if (peer != null) "Connected • Ready to chat" else "Offline"
+                val lastTimestamp = lastMsg?.timestamp ?: (peer?.lastSeenTimestamp ?: System.currentTimeMillis())
 
-            if (searchQuery.isNotBlank() &&
-                !alias.contains(searchQuery, ignoreCase = true) &&
-                !lastMsgText.contains(searchQuery, ignoreCase = true)
-            ) {
-                return@mapNotNull null
-            }
+                if (searchQuery.isNotBlank() &&
+                    !alias.contains(searchQuery, ignoreCase = true) &&
+                    !lastMsgText.contains(searchQuery, ignoreCase = true)
+                ) {
+                    return@mapNotNull null
+                }
 
-            val unreadCount = messages.count { !it.isMine }
-            ChatSummaryUiModel(
-                peerId = peerId,
-                alias = alias,
-                isOnline = peer != null,
-                hopDistance = peer?.hopDistance ?: -1,
-                lastMessage = lastMsgText,
-                timestamp = lastTimestamp,
-                unreadCount = unreadCount
-            )
-        }.sortedByDescending { it.timestamp }
+                val unreadCount = messages.count { !it.isMine }
+                ChatSummaryUiModel(
+                    peerId = peerId,
+                    alias = alias,
+                    isOnline = peer != null,
+                    hopDistance = peer?.hopDistance ?: -1,
+                    lastMessage = lastMsgText,
+                    timestamp = lastTimestamp,
+                    unreadCount = unreadCount
+                )
+            }.sortedByDescending { it.timestamp }
+        }
     }
 
     Scaffold(
