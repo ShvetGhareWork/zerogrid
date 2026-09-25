@@ -421,8 +421,7 @@ fun MessagesScreen(
                                                 lastMessage = chat.lastMessage,
                                                 timestamp = chat.timestamp,
                                                 unreadCount = chat.unreadCount,
-                                                onClick = { onOpenPeerChat?.invoke(chat.peerId) },
-                                                onDelete = { meshEngine.deleteConversation(chat.peerId) }
+                                                onClick = { onOpenPeerChat?.invoke(chat.peerId) }
                                             )
                                         }
                                     }
@@ -461,6 +460,33 @@ fun MessagesScreen(
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
+                        Button(
+                            onClick = {
+                                filteredPeers.firstOrNull()?.let { onOpenPeerChat?.invoke(it.nodeId) }
+                                    ?: onNavigate(Screen.MESH)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.primary,
+                                contentColor = if (colors.isDark) Color.Black else Color.White
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Start Chat",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 }
@@ -524,8 +550,7 @@ private fun RecentChatCard(
     lastMessage: String,
     timestamp: Long,
     unreadCount: Int,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
     val initials = if (alias.length >= 2) alias.take(2).uppercase() else "ZG"
@@ -679,8 +704,8 @@ private fun RecentChatCard(
                         }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (unreadCount > 0) {
+                    if (unreadCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .padding(end = 6.dp)
@@ -697,18 +722,6 @@ private fun RecentChatCard(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                        }
-
-                        IconButton(
-                            onClick = onDelete,
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = "Remove Chat",
-                                tint = colors.textSecondary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(14.dp)
-                            )
                         }
                     }
                 }

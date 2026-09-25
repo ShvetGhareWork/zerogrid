@@ -1,5 +1,6 @@
 package com.example.zerogrid.emergency
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.hardware.GeomagneticField
@@ -13,6 +14,7 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +62,7 @@ import kotlin.math.*
  * - "OPEN IN MAPS" intent for Google Maps / OsmAnd turn-by-turn navigation.
  * - ON TARGET indicator when heading is within ±10° of bearing.
  */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackSosScreen(
@@ -257,22 +260,24 @@ fun TrackSosScreen(
     }
 
     // ── UI ─────────────────────────────────────────────────────────────────────
+    val colors = ZeroGridTheme.colors
+
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = colors.background,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
                             text = "TRACK LOCATION",
-                            color = TextPrimary,
+                            color = colors.textPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             text = "SOS by $targetName",
-                            color = TextSecondary,
+                            color = colors.textSecondary,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -280,211 +285,233 @@ fun TrackSosScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Category + elapsed time badge row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CategoryChip(category)
-                Text(
-                    text = formatElapsed(sosTimestamp),
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+            val isTablet = maxWidth >= 600.dp
+            val horizontalPadding = if (isTablet) 32.dp else 20.dp
+            val compassSize = if (maxWidth < 360.dp) 240.dp else if (isTablet) 320.dp else 280.dp
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── Compass Radar ──────────────────────────────────────────────────
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(280.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(
-                                Color(0xFF0A1628),
-                                DarkBackground
-                            )
-                        )
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = if (isOnTarget) Color(0xFF00FF88) else AlertPink.copy(alpha = 0.6f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = horizontalPadding, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRadarGrid(radarPulse, isOnTarget)
-                    drawCompassRose()
-                    drawNeedle(needleAngle, isOnTarget)
-                }
-
-                // Center dot
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(
-                            if (isOnTarget) Color(0xFF00FF88) else Color.White,
-                            CircleShape
-                        )
-                )
-
-                // ON TARGET indicator
-                if (isOnTarget) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 32.dp)
-                            .background(
-                                Color(0xFF00FF88).copy(alpha = 0.15f),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .border(1.dp, Color(0xFF00FF88), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            "◎  ON TARGET",
-                            color = Color(0xFF00FF88),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // ── Distance & Direction Readout ───────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                MetricCard(
-                    label = "DISTANCE",
-                    value = formatDistance(distanceMeters),
-                    icon = Icons.Outlined.Route,
-                    highlight = distanceMeters != null && distanceMeters!! < 100f
-                )
-                MetricCard(
-                    label = "BEARING",
-                    value = "${targetBearing.toInt()}°",
-                    icon = Icons.Outlined.Explore,
-                    highlight = false
-                )
-                MetricCard(
-                    label = "ETA (WALK)",
-                    value = formatWalkTime(distanceMeters),
-                    icon = Icons.AutoMirrored.Outlined.DirectionsWalk,
-                    highlight = false
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── Coordinates Card ───────────────────────────────────────────────
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "TARGET COORDINATES",
-                        color = TextSecondary,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.PinDrop, contentDescription = null, tint = AlertPink, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "%.6f, %.6f".format(targetLat, targetLng),
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    if (responderLat != null && responderLng != null) {
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.MyLocation, contentDescription = null, tint = StatusActive, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
+                        // Category + elapsed time badge row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CategoryChip(category)
                             Text(
-                                text = "Your position: %.6f, %.6f".format(responderLat, responderLng),
-                                color = TextSecondary,
+                                text = formatElapsed(sosTimestamp),
+                                color = colors.textSecondary,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ── Compass Radar ──────────────────────────────────────────────────
+                        Box(
+                            modifier = Modifier
+                                .size(compassSize)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        listOf(
+                                            colors.surfaceNested,
+                                            colors.background
+                                        )
+                                    )
+                                )
+                                .border(
+                                    width = 2.dp,
+                                    color = if (isOnTarget) colors.badgeGreen else colors.accentRed.copy(alpha = 0.6f),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawRadarGrid(radarPulse, isOnTarget, colors)
+                                drawCompassRose(colors)
+                                drawNeedle(needleAngle, isOnTarget, colors)
+                            }
+
+                            // Center dot
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .background(
+                                        if (isOnTarget) colors.badgeGreen else colors.textPrimary,
+                                        CircleShape
+                                    )
+                            )
+
+                            // ON TARGET indicator
+                            if (isOnTarget) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 32.dp)
+                                        .background(
+                                            colors.badgeGreen.copy(alpha = 0.15f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .border(1.dp, colors.badgeGreen, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "◎  ON TARGET",
+                                        color = colors.badgeGreen,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // ── Distance & Direction Readout ───────────────────────────────────
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                MetricCard(
+                                    label = "DISTANCE",
+                                    value = formatDistance(distanceMeters),
+                                    icon = Icons.Outlined.Route,
+                                    highlight = distanceMeters != null && distanceMeters!! < 100f
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                MetricCard(
+                                    label = "BEARING",
+                                    value = "${targetBearing.toInt()}°",
+                                    icon = Icons.Outlined.Explore,
+                                    highlight = false
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                MetricCard(
+                                    label = "ETA (WALK)",
+                                    value = formatWalkTime(distanceMeters),
+                                    icon = Icons.AutoMirrored.Outlined.DirectionsWalk,
+                                    highlight = false
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ── Coordinates Card ───────────────────────────────────────────────
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, colors.divider)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "TARGET COORDINATES",
+                                    color = colors.textSecondary,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.PinDrop, contentDescription = null, tint = colors.accentRed, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "%.6f, %.6f".format(targetLat, targetLng),
+                                        color = colors.textPrimary,
+                                        fontSize = 13.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                if (responderLat != null && responderLng != null) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.MyLocation, contentDescription = null, tint = colors.badgeGreen, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = "Your position: %.6f, %.6f".format(responderLat, responderLng),
+                                            color = colors.textSecondary,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ── Open in Maps Button ────────────────────────────────────────────
+                        Button(
+                            onClick = {
+                                val uri = Uri.parse("geo:$targetLat,$targetLng?q=$targetLat,$targetLng(Emergency+SOS)")
+                                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                    setPackage("com.google.android.apps.maps")
+                                }
+                                if (intent.resolveActivity(context.packageManager) != null) {
+                                    context.startActivity(intent)
+                                } else {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Outlined.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "OPEN IN MAPS",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ── Open in Maps Button ────────────────────────────────────────────
-            Button(
-                onClick = {
-                    val uri = Uri.parse("geo:$targetLat,$targetLng?q=$targetLat,$targetLng(Emergency+SOS)")
-                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                        setPackage("com.google.android.apps.maps")
-                    }
-                    if (intent.resolveActivity(context.packageManager) != null) {
-                        context.startActivity(intent)
-                    } else {
-                        // Fallback to any mapping app
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Icon(Icons.Outlined.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "OPEN IN MAPS",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 14.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
 
 // ── Canvas Drawing ──────────────────────────────────────────────────────────────
 
-private fun DrawScope.drawRadarGrid(pulse: Float, isOnTarget: Boolean) {
+private fun DrawScope.drawRadarGrid(pulse: Float, isOnTarget: Boolean, colors: ZeroGridColorScheme) {
     val center = Offset(size.width / 2f, size.height / 2f)
     val maxR = size.minDimension / 2f
-    val gridColor = if (isOnTarget) Color(0xFF00FF88) else Color(0xFFEF4444)
+    val gridColor = if (isOnTarget) colors.badgeGreen else colors.accentRed
 
     // Concentric rings
     for (i in 1..4) {
@@ -512,10 +539,10 @@ private fun DrawScope.drawRadarGrid(pulse: Float, isOnTarget: Boolean) {
     drawLine(lineColor, Offset(center.x - maxR, center.y), Offset(center.x + maxR, center.y), strokeWidth = 1.dp.toPx())
 }
 
-private fun DrawScope.drawCompassRose() {
+private fun DrawScope.drawCompassRose(colors: ZeroGridColorScheme) {
     val center = Offset(size.width / 2f, size.height / 2f)
     val r = size.minDimension / 2f - 12.dp.toPx()
-    val tickColor = Color.White.copy(alpha = 0.3f)
+    val tickColor = colors.textPrimary.copy(alpha = 0.3f)
 
     for (deg in 0 until 360 step 45) {
         val rad = Math.toRadians(deg.toDouble())
@@ -533,10 +560,10 @@ private fun DrawScope.drawCompassRose() {
     }
 }
 
-private fun DrawScope.drawNeedle(angleFromNorth: Float, isOnTarget: Boolean) {
+private fun DrawScope.drawNeedle(angleFromNorth: Float, isOnTarget: Boolean, colors: ZeroGridColorScheme) {
     val center = Offset(size.width / 2f, size.height / 2f)
     val needleLength = size.minDimension / 2f * 0.7f
-    val color = if (isOnTarget) Color(0xFF00FF88) else Color(0xFFEF4444)
+    val color = if (isOnTarget) colors.badgeGreen else colors.accentRed
 
     rotate(angleFromNorth, pivot = center) {
         // Arrow head pointing "up" = toward target bearing
@@ -578,27 +605,29 @@ private fun DrawScope.drawNeedle(angleFromNorth: Float, isOnTarget: Boolean) {
 
 @Composable
 private fun MetricCard(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, highlight: Boolean) {
+    val colors = ZeroGridTheme.colors
     Card(
-        modifier = Modifier.width(100.dp),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (highlight) Color(0xFF00FF88).copy(alpha = 0.1f) else CardBackground
+            containerColor = if (highlight) colors.badgeGreen.copy(alpha = 0.1f) else colors.cardBackground
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (highlight) colors.badgeGreen.copy(alpha = 0.5f) else colors.divider)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (highlight) Color(0xFF00FF88) else TextSecondary,
+                tint = if (highlight) colors.badgeGreen else colors.textSecondary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = value,
-                color = if (highlight) Color(0xFF00FF88) else TextPrimary,
+                color = if (highlight) colors.badgeGreen else colors.textPrimary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
@@ -606,7 +635,7 @@ private fun MetricCard(label: String, value: String, icon: androidx.compose.ui.g
             )
             Text(
                 text = label,
-                color = TextSecondary,
+                color = colors.textSecondary,
                 fontSize = 8.sp,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center
@@ -617,12 +646,13 @@ private fun MetricCard(label: String, value: String, icon: androidx.compose.ui.g
 
 @Composable
 private fun CategoryChip(category: String) {
+    val colors = ZeroGridTheme.colors
     val (bg, fg) = when (category.uppercase()) {
-        "MEDICAL"  -> Pair(Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFEF4444))
+        "MEDICAL"  -> Pair(colors.accentRed.copy(alpha = 0.15f), colors.accentRed)
         "DISASTER" -> Pair(Color(0xFFF97316).copy(alpha = 0.15f), Color(0xFFF97316))
         "TRAPPED"  -> Pair(Color(0xFFEAB308).copy(alpha = 0.15f), Color(0xFFEAB308))
         "SECURITY" -> Pair(Color(0xFF8B5CF6).copy(alpha = 0.15f), Color(0xFF8B5CF6))
-        else       -> Pair(AlertPink.copy(alpha = 0.15f), AlertPink)
+        else       -> Pair(colors.accentRed.copy(alpha = 0.15f), colors.accentRed)
     }
     Box(
         modifier = Modifier
@@ -667,3 +697,4 @@ private fun formatElapsed(timestamp: Long): String {
         else -> "${minutes / 60}h ${minutes % 60}m ago"
     }
 }
+

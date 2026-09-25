@@ -1,6 +1,7 @@
 package com.example.zerogrid.settings
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -262,9 +264,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        showResetDialog = false
-                    },
+                    onClick = { showResetDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = colors.accentRed)
                 ) {
                     Text("Confirm Reset", color = Color.White, fontWeight = FontWeight.Bold)
@@ -280,7 +280,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        containerColor = Color.Transparent, // Overdraw elimination: root Scaffold owns background
+        containerColor = Color.Transparent,
     ) { paddingValues ->
         BoxWithConstraints(
             modifier = Modifier
@@ -290,96 +290,102 @@ fun SettingsScreen(
             val isTablet = maxWidth >= 600.dp
             val horizontalPadding = if (isTablet) 32.dp else 16.dp
 
+            // Separated into distinct `item` blocks for improved rendering responsiveness and scroll efficiency
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = horizontalPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(vertical = 16.dp)
+                contentPadding = PaddingValues(
+                    top = 8.dp,
+                    bottom = 16.dp,
+                    start = 0.dp,
+                    end = 0.dp  ),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .widthIn(max = 840.dp)
-                            .fillMaxWidth()
-                    ) {
-                        Column {
-                            // Header: Settings + Subtitle + Active Mesh Pill
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Settings",
-                                        fontSize = 26.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Mesh radios, identity & offline storage",
-                                        fontSize = 13.sp,
-                                        color = colors.textSecondary
-                                    )
-                                }
-
-                                Surface(
-                                    color = if (isMeshActive) BadgeGreen.copy(alpha = 0.12f) else colors.surfaceNested,
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.CellTower,
-                                            contentDescription = null,
-                                            tint = if (isMeshActive) BadgeGreen else colors.textSecondary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (isMeshActive) "Active Mesh" else "Mesh Offline",
-                                            color = if (isMeshActive) BadgeGreen else colors.textSecondary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
+                // Header Item
+                item(key = "header") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Settings",
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Mesh radios, identity & offline storage",
+                                    fontSize = 13.sp,
+                                    color = colors.textSecondary
+                                )
                             }
 
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Surface(
+                                color = if (isMeshActive) BadgeGreen.copy(alpha = 0.12f) else colors.surfaceNested,
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CellTower,
+                                        contentDescription = null,
+                                        tint = if (isMeshActive) BadgeGreen else colors.textSecondary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (isMeshActive) "Active Mesh" else "Mesh Offline",
+                                        color = if (isMeshActive) BadgeGreen else colors.textSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
-                            val userEmail = sessionManager.getUserEmail() ?: ""
-                            val userRole = sessionManager.getUserRole()?.name ?: "CITIZEN"
-                            val userPhone = sessionManager.getPhoneNumber()
-                            val userDob = sessionManager.getDateOfBirth()
-                            val isProfileComplete = displayName.isNotBlank() && userPhone.isNotBlank() && userDob.isNotBlank()
+                // Profile Item
+                item(key = "profile") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        val userEmail = sessionManager.getUserEmail() ?: ""
+                        val userRole = sessionManager.getUserRole()?.name ?: "CITIZEN"
+                        val userPhone = sessionManager.getPhoneNumber()
+                        val userDob = sessionManager.getDateOfBirth()
+                        val isProfileComplete = displayName.isNotBlank() && userPhone.isNotBlank() && userDob.isNotBlank()
 
-                            // Identity Profile Card
-                            IdentityProfileHeroCard(
-                                alias = displayName,
-                                email = userEmail,
-                                role = userRole,
-                                isProfileComplete = isProfileComplete,
-                                nodeId = meshEngine.localNodeId,
-                                peersCount = peers.size,
-                                onEditClick = { showEditNameDialog = true },
-                                onProfileClick = { onNavigate(Screen.PROFILE) }
-                            )
+                        IdentityProfileHeroCard(
+                            alias = displayName,
+                            email = userEmail,
+                            role = userRole,
+                            isProfileComplete = isProfileComplete,
+                            nodeId = meshEngine.localNodeId,
+                            peersCount = peers.size,
+                            onEditClick = { showEditNameDialog = true },
+                            onProfileClick = { onNavigate(Screen.PROFILE) }
+                        )
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Section 1: MESH RADIOS & CONNECTIVITY
+                // Connectivity Section
+                item(key = "connectivity") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Column {
                             SectionLabel(text = "MESH RADIOS & CONNECTIVITY")
                             Spacer(modifier = Modifier.height(8.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
                             ) {
                                 Column {
                                     SettingsSwitchItem(
@@ -407,17 +413,21 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Section 2: SECURITY & ENCRYPTION
+                // Security Section
+                item(key = "security") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Column {
                             SectionLabel(text = "SECURITY & ENCRYPTION")
                             Spacer(modifier = Modifier.height(8.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
                             ) {
                                 Column {
                                     SettingsBadgeItem(
@@ -437,17 +447,21 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Section: APPEARANCE
+                // Appearance Section
+                item(key = "appearance") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Column {
                             SectionLabel(text = "APPEARANCE")
                             Spacer(modifier = Modifier.height(8.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
@@ -476,16 +490,21 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-                            // Section 3: EMERGENCY & CRISIS RESPONSE
+                // Emergency Section (Highly Responsive & Themed)
+                item(key = "emergency") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Column {
                             SectionLabel(text = "EMERGENCY & CRISIS RESPONSE")
                             Spacer(modifier = Modifier.height(8.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
                             ) {
                                 Column {
                                     SettingsActionItem(
@@ -504,27 +523,34 @@ fun SettingsScreen(
                                         onClick = { onNavigate(Screen.FAMILY_LINKS) }
                                     )
                                     HorizontalDivider(color = colors.divider, thickness = 1.dp)
+                                    // Colored specifically to stand out visually for immediate crisis access
                                     SettingsActionItem(
                                         icon = Icons.Outlined.WarningAmber,
                                         title = "SOS Emergency Center",
                                         subtitle = "Distress beacons & real-time responder alerts",
                                         actionText = "Open",
+                                        iconTint = colors.accentRed,
+                                        actionTint = colors.accentRed,
+                                        boxBgTint = colors.accentRed.copy(alpha = 0.15f),
                                         onClick = { onNavigate(Screen.SOS_CENTER) }
                                     )
-
                                 }
                             }
+                        }
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Section 4: CRYPTOGRAPHIC IDENTITY
+                // Cryptographic Identity Section
+                item(key = "identity") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        Column {
                             SectionLabel(text = "CRYPTOGRAPHIC IDENTITY")
                             Spacer(modifier = Modifier.height(8.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = colors.accentRed.copy(alpha = 0.05f)),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.accentRed.copy(alpha = 0.25f)))
+                                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.accentRed.copy(alpha = 0.25f)))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -564,7 +590,7 @@ fun SettingsScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.accentRed),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.accentRed.copy(alpha = 0.6f))
+                                        border = BorderStroke(1.dp, colors.accentRed.copy(alpha = 0.6f))
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.RestartAlt,
@@ -580,33 +606,33 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // Sign Out CTA
-                            OutlinedButton(
-                                onClick = onLogout,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textSecondary),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, colors.divider)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Sign Out of Device",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(32.dp))
+                // Sign Out Button Item
+                item(key = "signout") {
+                    Box(modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = onLogout,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textSecondary),
+                            border = BorderStroke(1.dp, colors.divider)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Sign Out of Device",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -630,13 +656,12 @@ private fun IdentityProfileHeroCard(
     val initials = if (alias.length >= 2) alias.take(2).uppercase() else "ZG"
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onProfileClick() },
+        onClick = onProfileClick,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(colors.divider))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(colors.divider))
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -819,6 +844,7 @@ private fun SettingsSwitchItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -859,7 +885,7 @@ private fun SettingsSwitchItem(
 
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null, // Managed by Row click for better hit-box responsiveness
             colors = SwitchDefaults.colors(
                 checkedThumbColor = if (colors.isDark) Color.Black else Color.White,
                 checkedTrackColor = colors.primary,
@@ -876,6 +902,9 @@ private fun SettingsActionItem(
     title: String,
     subtitle: String,
     actionText: String,
+    iconTint: Color = ZeroGridTheme.colors.primary,
+    actionTint: Color = ZeroGridTheme.colors.primary,
+    boxBgTint: Color = ZeroGridTheme.colors.surfaceNested,
     onClick: () -> Unit
 ) {
     val colors = ZeroGridTheme.colors
@@ -895,13 +924,13 @@ private fun SettingsActionItem(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(colors.surfaceNested, RoundedCornerShape(10.dp)),
+                    .background(boxBgTint, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = colors.primary,
+                    tint = iconTint,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -925,7 +954,7 @@ private fun SettingsActionItem(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = actionText,
-                color = colors.primary,
+                color = actionTint,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )
